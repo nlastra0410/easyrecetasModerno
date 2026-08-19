@@ -1,0 +1,6 @@
+{
+  "name": "EasyRecetas",
+  "description": "Sistema de gestión médica para emisión, seguimiento y dispensación de recetas médicas digitales, pacientes y medicamentos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
