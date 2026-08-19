@@ -32,14 +32,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         body: JSON.stringify({ rut })
       });
       
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       
-      if (!res.ok) {
-        setError(data.error || 'Error al solicitar código');
+      if (!res.ok || !data) {
+        setError(data?.error || `Error del servidor (${res.status}). Verifique su conexión o credenciales.`);
         return;
       }
 
-      setPhoneMask(data.phoneLastDigits);
+      setPhoneMask(data.phoneLastDigits || 'xxxx');
       setEmailMask(data.emailMask || '');
       setTwilioActive(Boolean(data.twilioConfigured));
       setEmailSent(Boolean(data.emailSent));
@@ -48,8 +48,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         setTokenInput(data.devCode); // Pre-fill for quick access
       }
       setStep(2);
-    } catch (err) {
-      setError('Error de conexión con el servidor.');
+    } catch (err: any) {
+      setError(err?.message || 'Error de conexión con el servidor.');
     } finally {
       setLoading(false);
     }
@@ -67,16 +67,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         body: JSON.stringify({ rut, token: tokenInput })
       });
       
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (!res.ok) {
-        setError(data.error || 'Código incorrecto o expirado');
+      if (!res.ok || !data) {
+        setError(data?.error || 'Código incorrecto o expirado');
         return;
       }
 
       onLogin(data.role, data.user);
-    } catch (err) {
-      setError('Error de conexión con el servidor.');
+    } catch (err: any) {
+      setError(err?.message || 'Error de conexión con el servidor.');
     } finally {
       setLoading(false);
     }

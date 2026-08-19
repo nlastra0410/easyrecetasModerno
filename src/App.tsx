@@ -54,17 +54,20 @@ export const App: React.FC = () => {
   const loadData = async () => {
     try {
       const res = await fetch('/api/init');
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (data.pacientes.length === 0) {
-        console.log('DB empty, seeding...');
-        await fetch('/api/seed', { method: 'POST' });
-        // Reload after seed
-        const res2 = await fetch('/api/init');
-        const data2 = await res2.json();
-        populateData(data2);
-      } else {
-        populateData(data);
+      if (data && data.pacientes) {
+        if (data.pacientes.length === 0) {
+          console.log('DB empty, seeding...');
+          await fetch('/api/seed', { method: 'POST' });
+          const res2 = await fetch('/api/init');
+          const data2 = await res2.json().catch(() => null);
+          if (data2 && data2.pacientes) {
+            populateData(data2);
+          }
+        } else {
+          populateData(data);
+        }
       }
     } catch (err) {
       console.error('Error loading data', err);
