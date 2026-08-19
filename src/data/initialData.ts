@@ -71,6 +71,21 @@ export const initialMedicos: Medico[] = [
     correo: 'nelsonlastra4@gmail.com',
     telefono: '+56934456811',
     firma_digital: 'DIGITAL_SIG_CERT_16778715'
+  },
+  {
+    id: 5,
+    user_id: 5,
+    nombres: 'Dr. Hans',
+    apellidos: 'Lembach Palma',
+    rut: '12792034',
+    dv: '6',
+    registro_minsal: 'RNM-639102',
+    profesiones_id: 1,
+    profesion_nombre: 'Médico Cirujano',
+    especialidad: 'Medicina General',
+    correo: 'qflembach@gmail.com',
+    telefono: '+56912345678',
+    firma_digital: 'DIGITAL_SIG_CERT_12792034'
   }
 ];
 

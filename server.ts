@@ -40,12 +40,13 @@ async function sendAuthEmail(toEmail: string, token: string, userName: string): 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <h2 style="color: #0c706a; margin: 0; font-size: 24px; letter-spacing: 1px;">Easy<span style="font-weight: 800; color: #13b0a5;">Recetas</span></h2>
-        <p style="color: #64748b; font-size: 12px; margin-top: 4px; text-transform: uppercase;">Portal Profesionales de la Salud</p>
+        <h2 style="color: #0369a1; margin: 0; font-size: 24px; letter-spacing: 1px;">Easy<span style="font-weight: 800; color: #0284c7;">Recetas</span></h2>
+        <p style="color: #0ea5e9; font-size: 11px; font-weight: 600; margin-top: 2px;">Tu Salud nos Mueve</p>
+        <p style="color: #64748b; font-size: 12px; margin-top: 4px; text-transform: uppercase;">Portal Oficial Profesionales de la Salud</p>
       </div>
-      <div style="background-color: #f0fdfa; border: 1px solid #ccfbf1; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-        <p style="color: #0f766e; font-size: 14px; margin-bottom: 12px;">Estimado(a) <strong>${userName}</strong>, tu código de acceso es:</p>
-        <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #0c706a; font-family: monospace; padding: 8px 16px; background-color: #ffffff; border-radius: 6px; display: inline-block; border: 2px dashed #13b0a5;">
+      <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+        <p style="color: #0369a1; font-size: 14px; margin-bottom: 12px;">Estimado(a) <strong>${userName}</strong>, tu código de acceso seguro es:</p>
+        <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #0284c7; font-family: monospace; padding: 8px 16px; background-color: #ffffff; border-radius: 6px; display: inline-block; border: 2px dashed #38bdf8;">
           ${token}
         </div>
       </div>
@@ -53,7 +54,7 @@ async function sendAuthEmail(toEmail: string, token: string, userName: string): 
         Este código es confidencial y caducará automáticamente en <strong>5 minutos</strong>.
       </p>
       <p style="color: #94a3b8; font-size: 11px; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 12px; text-align: center;">
-        Si tú no solicitaste este acceso, por favor desestima este correo o contacta a soporte.
+        Si tú no solicitaste este acceso, por favor desestima este correo o contacta a soporte de EasyRecetas.
       </p>
     </div>
   `;
