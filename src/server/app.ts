@@ -246,40 +246,222 @@ async function ensureDbSynced() {
   if (dbSyncDone) return;
   try {
     if (!process.env.DATABASE_URL) {
+      console.warn('[DB SYNC] DATABASE_URL is not set.');
       return;
     }
+
+    // 1. Create tables in Neon if they don't exist yet
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS pacientes (
+        id SERIAL PRIMARY KEY,
+        rut VARCHAR(20) NOT NULL,
+        dv CHAR(1) NOT NULL,
+        nombres VARCHAR(255) NOT NULL,
+        paterno VARCHAR(255) NOT NULL,
+        materno VARCHAR(255),
+        fecha_nacimiento DATE,
+        correo VARCHAR(255),
+        telefono VARCHAR(50),
+        direccion TEXT,
+        activo CHAR(1) DEFAULT 'X',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS medicos (
+        id SERIAL PRIMARY KEY,
+        nombres VARCHAR(255) NOT NULL,
+        apellidos VARCHAR(255) NOT NULL,
+        rut VARCHAR(20),
+        dv CHAR(1),
+        telefono VARCHAR(50),
+        correo VARCHAR(255),
+        registro_minsal VARCHAR(100),
+        especialidad VARCHAR(255),
+        activo CHAR(1) DEFAULT 'X'
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS diagnostico (
+        id SERIAL PRIMARY KEY,
+        codigo VARCHAR(50) NOT NULL,
+        descripcion TEXT NOT NULL,
+        activo CHAR(1) DEFAULT 'X'
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS medicamentos (
+        id SERIAL PRIMARY KEY,
+        codigo VARCHAR(100),
+        descripcion TEXT NOT NULL,
+        laboratorio VARCHAR(255),
+        departamento VARCHAR(255),
+        restriccion VARCHAR(100),
+        forma_farmaceutica VARCHAR(100),
+        presentacion TEXT,
+        activo CHAR(1) DEFAULT 'X'
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS examenes (
+        id SERIAL PRIMARY KEY,
+        codigo VARCHAR(100),
+        nombre TEXT NOT NULL,
+        descripcion TEXT,
+        activo CHAR(1) DEFAULT 'X'
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farmacias (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(255) NOT NULL,
+        direccion TEXT,
+        comuna VARCHAR(100),
+        ciudad VARCHAR(100),
+        telefono VARCHAR(50),
+        rut VARCHAR(20)
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farmaceutas (
+        id SERIAL PRIMARY KEY,
+        nombres VARCHAR(255) NOT NULL,
+        paterno VARCHAR(255) NOT NULL,
+        materno VARCHAR(255),
+        rut VARCHAR(20),
+        dv CHAR(1),
+        farmacia_id INTEGER REFERENCES farmacias(id),
+        correo VARCHAR(255),
+        activo CHAR(1) DEFAULT 'X'
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS visitas (
+        id SERIAL PRIMARY KEY,
+        medico_id INTEGER REFERENCES medicos(id) NOT NULL,
+        paciente_id INTEGER REFERENCES pacientes(id) NOT NULL,
+        diagnostico_id INTEGER REFERENCES diagnostico(id),
+        tratamiento TEXT,
+        fecha TIMESTAMP DEFAULT NOW(),
+        estado_id INTEGER DEFAULT 1,
+        codigo_verificacion VARCHAR(100),
+        activo CHAR(1) DEFAULT 'X',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS recetas (
+        id SERIAL PRIMARY KEY,
+        visita_id INTEGER REFERENCES visitas(id) NOT NULL,
+        medicamento_id INTEGER REFERENCES medicamentos(id) NOT NULL,
+        tratamiento TEXT NOT NULL,
+        cantidad INTEGER DEFAULT 1,
+        duracion VARCHAR(100),
+        estado INTEGER DEFAULT 1,
+        farmaceuta_id INTEGER REFERENCES farmaceutas(id),
+        dispensado_fecha TIMESTAMP,
+        activo CHAR(1) DEFAULT 'X'
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS orden_examenes (
+        id SERIAL PRIMARY KEY,
+        visita_id INTEGER REFERENCES visitas(id) NOT NULL,
+        examen_id INTEGER REFERENCES examenes(id) NOT NULL,
+        indicaciones TEXT,
+        estado INTEGER DEFAULT 1
+      );
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS epicrisis (
+        id SERIAL PRIMARY KEY,
+        visita_id INTEGER REFERENCES visitas(id) NOT NULL,
+        paciente_id INTEGER REFERENCES pacientes(id) NOT NULL,
+        medico_id INTEGER REFERENCES medicos(id) NOT NULL,
+        contenido TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // Ensure columns exist on medicos
     await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS dv char(1);`);
     await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS telefono varchar(50);`);
     await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS correo varchar(255);`);
 
-    for (const m of initialMedicos) {
-      const existing = await db.query.medicos.findFirst({
-        where: or(eq(medicos.rut, m.rut), eq(medicos.rut, `${m.rut}-${m.dv}`))
-      });
-      if (!existing) {
-        await db.insert(medicos).values({
-          nombres: m.nombres,
-          apellidos: m.apellidos,
-          rut: m.rut,
-          dv: m.dv,
-          telefono: m.telefono,
-          correo: m.correo,
-          registro_minsal: m.registro_minsal,
-          especialidad: m.especialidad,
-          activo: 'X'
+    // 2. Auto-seed if tables are empty
+    const pCount = await db.select().from(pacientes);
+    if (pCount.length === 0) {
+      console.log('[DB SYNC] Neon DB is empty. Seeding initial records...');
+      await db.insert(pacientes).values(initialPacientes.map(p => ({
+        rut: p.rut, dv: p.dv, nombres: p.nombres, paterno: p.paterno, materno: p.materno,
+        fecha_nacimiento: p.fecha_nacimiento ? new Date(p.fecha_nacimiento).toISOString().split('T')[0] : null,
+        correo: p.correo, telefono: p.telefono, direccion: p.direccion, activo: p.activo
+      })));
+      await db.insert(medicos).values(initialMedicos.map(m => ({
+        nombres: m.nombres, apellidos: m.apellidos, rut: m.rut, dv: m.dv, registro_minsal: m.registro_minsal,
+        especialidad: m.especialidad, correo: m.correo, telefono: m.telefono, activo: m.activo
+      })));
+      await db.insert(diagnostico).values(initialDiagnosticos.map(d => ({
+        codigo: d.codigo, descripcion: d.descripcion, activo: d.activo
+      })));
+      await db.insert(medicamentos).values(initialMedicamentos.map(m => ({
+        codigo: m.codigo, descripcion: m.descripcion, laboratorio: m.laboratorio, departamento: m.departamento,
+        restriccion: m.restriccion, forma_farmaceutica: m.forma_farmaceutica, presentacion: m.presentacion, activo: m.activo
+      })));
+      await db.insert(examenes).values(initialExamenes.map(e => ({
+        codigo: e.codigo, nombre: e.nombre, descripcion: e.descripcion, activo: e.activo
+      })));
+      await db.insert(farmacias).values(initialFarmacias.map(f => ({
+        nombre: f.nombre, direccion: f.direccion, comuna: f.comuna, ciudad: f.ciudad, telefono: f.telefono, rut: f.rut
+      })));
+      await db.insert(farmaceutas).values(initialFarmaceutas.map(f => ({
+        nombres: f.nombres, paterno: f.paterno, materno: f.materno, rut: f.rut, dv: f.dv, farmacia_id: f.farmacia_id,
+        correo: f.correo, activo: f.activo
+      })));
+      console.log('[DB SYNC] Initial data seeded successfully.');
+    } else {
+      // Ensure initial medicos exist and are synced
+      for (const m of initialMedicos) {
+        const existing = await db.query.medicos.findFirst({
+          where: or(eq(medicos.rut, m.rut), eq(medicos.rut, `${m.rut}-${m.dv}`))
         });
-      } else {
-        await db.update(medicos).set({
-          nombres: m.nombres,
-          apellidos: m.apellidos,
-          dv: m.dv,
-          telefono: m.telefono,
-          correo: m.correo,
-          registro_minsal: m.registro_minsal,
-          especialidad: m.especialidad
-        }).where(eq(medicos.id, existing.id));
+        if (!existing) {
+          await db.insert(medicos).values({
+            nombres: m.nombres,
+            apellidos: m.apellidos,
+            rut: m.rut,
+            dv: m.dv,
+            telefono: m.telefono,
+            correo: m.correo,
+            registro_minsal: m.registro_minsal,
+            especialidad: m.especialidad,
+            activo: 'X'
+          });
+        } else {
+          await db.update(medicos).set({
+            nombres: m.nombres,
+            apellidos: m.apellidos,
+            dv: m.dv,
+            telefono: m.telefono,
+            correo: m.correo,
+            registro_minsal: m.registro_minsal,
+            especialidad: m.especialidad
+          }).where(eq(medicos.id, existing.id));
+        }
       }
     }
+
     dbSyncDone = true;
   } catch (dbSyncErr) {
     console.warn("[DB SYNC NOTICE]", (dbSyncErr as any)?.message || dbSyncErr);
@@ -450,35 +632,7 @@ export function createExpressApp() {
   // SEED ENDPOINT
   apiRouter.post('/seed', async (req, res) => {
     try {
-      const pCount = await db.select().from(pacientes);
-      if (pCount.length === 0) {
-        await db.insert(pacientes).values(initialPacientes.map(p => ({
-          rut: p.rut, dv: p.dv, nombres: p.nombres, paterno: p.paterno, materno: p.materno,
-          fecha_nacimiento: p.fecha_nacimiento ? new Date(p.fecha_nacimiento).toISOString().split('T')[0] : null,
-          correo: p.correo, telefono: p.telefono, direccion: p.direccion, activo: p.activo
-        })));
-        await db.insert(medicos).values(initialMedicos.map(m => ({
-          nombres: m.nombres, apellidos: m.apellidos, rut: m.rut, dv: m.dv, registro_minsal: m.registro_minsal,
-          especialidad: m.especialidad, correo: m.correo, telefono: m.telefono, activo: m.activo
-        })));
-        await db.insert(diagnostico).values(initialDiagnosticos.map(d => ({
-          codigo: d.codigo, descripcion: d.descripcion, activo: d.activo
-        })));
-        await db.insert(medicamentos).values(initialMedicamentos.map(m => ({
-          codigo: m.codigo, descripcion: m.descripcion, laboratorio: m.laboratorio, departamento: m.departamento,
-          restriccion: m.restriccion, forma_farmaceutica: m.forma_farmaceutica, presentacion: m.presentacion, activo: m.activo
-        })));
-        await db.insert(examenes).values(initialExamenes.map(e => ({
-          codigo: e.codigo, nombre: e.nombre, descripcion: e.descripcion, activo: e.activo
-        })));
-        await db.insert(farmacias).values(initialFarmacias.map(f => ({
-          nombre: f.nombre, direccion: f.direccion, comuna: f.comuna, ciudad: f.ciudad, telefono: f.telefono, rut: f.rut
-        })));
-        await db.insert(farmaceutas).values(initialFarmaceutas.map(f => ({
-          nombres: f.nombres, paterno: f.paterno, materno: f.materno, rut: f.rut, dv: f.dv, farmacia_id: f.farmacia_id,
-          correo: f.correo, activo: f.activo
-        })));
-      }
+      await ensureDbSynced();
       res.json({ message: 'Seed OK' });
     } catch (e) {
       console.error(e);
@@ -489,6 +643,8 @@ export function createExpressApp() {
   // GET INITIAL DATA
   apiRouter.get('/init', async (req, res) => {
     try {
+      await ensureDbSynced();
+
       let p = await db.select().from(pacientes).catch(() => []);
       let m = await db.select().from(medicos).catch(() => []);
       let d = await db.select().from(diagnostico).catch(() => []);
@@ -537,6 +693,7 @@ export function createExpressApp() {
   // PACIENTES
   apiRouter.post('/pacientes', async (req, res) => {
     try {
+      await ensureDbSynced();
       const data = req.body;
       const result = await db.insert(pacientes).values({
         rut: data.rut, dv: data.dv, nombres: data.nombres, paterno: data.paterno, materno: data.materno,
@@ -552,6 +709,7 @@ export function createExpressApp() {
   // VISITAS / RECETAS
   apiRouter.post('/visitas', async (req, res) => {
     try {
+      await ensureDbSynced();
       const { visita } = req.body;
       const vResult = await db.insert(visitas).values({
         medico_id: visita.medico_id,
@@ -615,6 +773,7 @@ export function createExpressApp() {
   // DISPENSAR (QUEMAR) RECETA INDIVIDUAL
   apiRouter.put('/recetas/:id/dispensar', async (req, res) => {
     try {
+      await ensureDbSynced();
       const { id } = req.params;
       const { farmaceuta_id } = req.body;
       
@@ -650,6 +809,7 @@ export function createExpressApp() {
   // DISPENSAR (QUEMAR) TODA LA VISITA/RECETA
   apiRouter.put('/visitas/:id/dispensar-todo', async (req, res) => {
     try {
+      await ensureDbSynced();
       const { id } = req.params;
       const { farmaceuta_id } = req.body;
       const vId = Number(id);
@@ -688,6 +848,7 @@ export function createExpressApp() {
   // SEND PRESCRIPTION EMAIL TO PATIENT
   apiRouter.post('/visitas/:id/send-email', async (req, res) => {
     try {
+      await ensureDbSynced();
       const { id } = req.params;
       const { targetEmail, visitaPayload } = req.body;
 
