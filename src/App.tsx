@@ -112,18 +112,80 @@ export const App: React.FC = () => {
 
   const handleUpdatePaciente = (updatedPac: Paciente) => {
     setPacientes(prev => prev.map(p => p.id === updatedPac.id ? updatedPac : p));
+
+    fetch(`/api/pacientes/${updatedPac.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPac)
+    }).catch(err => console.error('Error al actualizar paciente en DB:', err));
   };
 
   const handleAddNewMedicamento = (newMed: Medicamento) => {
-    setMedicamentos(prev => [newMed, ...prev]);
+    const tempMed = { ...newMed, id: Date.now() };
+    setMedicamentos(prev => [tempMed, ...prev]);
+
+    fetch('/api/medicamentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMed)
+    })
+      .then(r => r.json())
+      .then(saved => {
+        setMedicamentos(prev => prev.map(m => m.id === tempMed.id ? saved : m));
+      })
+      .catch(err => console.error('Error al guardar medicamento en DB:', err));
   };
 
   const handleUpdateMedicamento = (updatedMed: Medicamento) => {
     setMedicamentos(prev => prev.map(m => m.id === updatedMed.id ? updatedMed : m));
+
+    fetch(`/api/medicamentos/${updatedMed.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedMed)
+    }).catch(err => console.error('Error al actualizar medicamento en DB:', err));
   };
 
   const handleAddNewMedico = (newMed: Medico) => {
-    setMedicos(prev => [...prev, newMed]);
+    const tempMed = { ...newMed, id: Date.now() };
+    setMedicos(prev => [...prev, tempMed]);
+
+    fetch('/api/medicos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMed)
+    })
+      .then(r => r.json())
+      .then(saved => {
+        setMedicos(prev => prev.map(m => m.id === tempMed.id ? saved : m));
+      })
+      .catch(err => console.error('Error al guardar médico en DB:', err));
+  };
+
+  const handleAddNewExamen = (newEx: Examen) => {
+    const tempEx = { ...newEx, id: Date.now() };
+    setExamenes(prev => [...prev, tempEx]);
+
+    fetch('/api/examenes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newEx)
+    })
+      .then(r => r.json())
+      .then(saved => {
+        setExamenes(prev => prev.map(e => e.id === tempEx.id ? saved : e));
+      })
+      .catch(err => console.error('Error al guardar examen en DB:', err));
+  };
+
+  const handleUpdateExamen = (updatedEx: Examen) => {
+    setExamenes(prev => prev.map(e => e.id === updatedEx.id ? updatedEx : e));
+
+    fetch(`/api/examenes/${updatedEx.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedEx)
+    }).catch(err => console.error('Error al actualizar examen en DB:', err));
   };
 
   const handleSaveVisita = (newVisita: Visita) => {
@@ -309,8 +371,8 @@ export const App: React.FC = () => {
           {currentTab === 'examenes' && isAuthenticated && (
             <ExamenesView
               examenes={examenes}
-              onAddNewExamen={(ex) => console.log('Examen added:', ex)}
-              onUpdateExamen={(ex) => console.log('Examen updated:', ex)}
+              onAddNewExamen={handleAddNewExamen}
+              onUpdateExamen={handleUpdateExamen}
             />
           )}
 

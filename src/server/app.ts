@@ -22,7 +22,8 @@ import {
   initialMedicamentos,
   initialExamenes,
   initialFarmacias,
-  initialFarmaceutas
+  initialFarmaceutas,
+  initialVisitas
 } from '../data/initialData.js';
 import twilio from 'twilio';
 import nodemailer from 'nodemailer';
@@ -394,10 +395,28 @@ async function ensureDbSynced() {
       );
     `);
 
-    // Ensure columns exist on medicos
+    // Ensure all required columns exist in Neon database
+    await db.execute(sql`ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS correo varchar(255);`);
+    await db.execute(sql`ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS telefono varchar(50);`);
+    await db.execute(sql`ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS direccion text;`);
+    await db.execute(sql`ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS activo char(1) DEFAULT 'X';`);
+    await db.execute(sql`ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT NOW();`);
+    await db.execute(sql`ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT NOW();`);
+
     await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS dv char(1);`);
     await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS telefono varchar(50);`);
     await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS correo varchar(255);`);
+    await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS registro_minsal varchar(100);`);
+    await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS especialidad varchar(255);`);
+    await db.execute(sql`ALTER TABLE medicos ADD COLUMN IF NOT EXISTS activo char(1) DEFAULT 'X';`);
+
+    await db.execute(sql`ALTER TABLE farmaceutas ADD COLUMN IF NOT EXISTS dv char(1);`);
+    await db.execute(sql`ALTER TABLE farmaceutas ADD COLUMN IF NOT EXISTS correo varchar(255);`);
+    await db.execute(sql`ALTER TABLE farmaceutas ADD COLUMN IF NOT EXISTS activo char(1) DEFAULT 'X';`);
+
+    await db.execute(sql`ALTER TABLE visitas ADD COLUMN IF NOT EXISTS activo char(1) DEFAULT 'X';`);
+    await db.execute(sql`ALTER TABLE visitas ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT NOW();`);
+    await db.execute(sql`ALTER TABLE recetas ADD COLUMN IF NOT EXISTS activo char(1) DEFAULT 'X';`);
 
     // 2. Auto-seed if tables are empty
     const pCount = await db.select().from(pacientes);
@@ -429,9 +448,37 @@ async function ensureDbSynced() {
         nombres: f.nombres, paterno: f.paterno, materno: f.materno, rut: f.rut, dv: f.dv, farmacia_id: f.farmacia_id,
         correo: f.correo, activo: f.activo
       })));
-      console.log('[DB SYNC] Initial data seeded successfully.');
+
+      // Seed initial visits and prescriptions
+      for (const vi of initialVisitas) {
+        const [vRow] = await db.insert(visitas).values({
+          medico_id: vi.medico_id,
+          paciente_id: vi.paciente_id,
+          diagnostico_id: vi.diagnostico_id || null,
+          tratamiento: vi.tratamiento,
+          fecha: vi.fecha ? new Date(vi.fecha) : new Date(),
+          estado_id: vi.estado_id || 1,
+          codigo_verificacion: vi.codigo_verificacion,
+          activo: 'X'
+        }).returning();
+
+        if (vi.recetas && vi.recetas.length > 0) {
+          await db.insert(recetas).values(vi.recetas.map(r => ({
+            visita_id: vRow.id,
+            medicamento_id: r.medicamento_id,
+            tratamiento: r.tratamiento,
+            cantidad: r.cantidad || 1,
+            duracion: r.duracion,
+            estado: r.estado || 1,
+            farmaceuta_id: r.farmaceuta_id || null,
+            dispensado_fecha: r.dispensado_fecha ? new Date(r.dispensado_fecha) : null,
+            activo: 'X'
+          })));
+        }
+      }
+      console.log('[DB SYNC] Initial data and visits seeded successfully.');
     } else {
-      // Ensure initial medicos exist and are synced
+      // Ensure all medicos exist and have updated info (e.g. Dr. Nelson)
       for (const m of initialMedicos) {
         const existing = await db.query.medicos.findFirst({
           where: or(eq(medicos.rut, m.rut), eq(medicos.rut, `${m.rut}-${m.dv}`))
@@ -458,6 +505,67 @@ async function ensureDbSynced() {
             registro_minsal: m.registro_minsal,
             especialidad: m.especialidad
           }).where(eq(medicos.id, existing.id));
+        }
+      }
+
+      // Ensure Maximiliano Lastra exists in pacientes in DB
+      for (const p of initialPacientes) {
+        const existingPac = await db.query.pacientes.findFirst({
+          where: or(eq(pacientes.rut, p.rut), eq(pacientes.rut, `${p.rut}-${p.dv}`))
+        });
+        if (!existingPac) {
+          await db.insert(pacientes).values({
+            rut: p.rut,
+            dv: p.dv,
+            nombres: p.nombres,
+            paterno: p.paterno,
+            materno: p.materno,
+            fecha_nacimiento: p.fecha_nacimiento ? new Date(p.fecha_nacimiento).toISOString().split('T')[0] : null,
+            correo: p.correo,
+            telefono: p.telefono,
+            direccion: p.direccion,
+            activo: p.activo || 'X'
+          });
+        } else {
+          await db.update(pacientes).set({
+            nombres: p.nombres,
+            paterno: p.paterno,
+            materno: p.materno,
+            correo: p.correo,
+            telefono: p.telefono,
+            direccion: p.direccion
+          }).where(eq(pacientes.id, existingPac.id));
+        }
+      }
+
+      // Ensure Dr. Nelson's visit with Maximiliano exists
+      const existingVisitas = await db.select().from(visitas);
+      if (existingVisitas.length === 0) {
+        for (const vi of initialVisitas) {
+          const [vRow] = await db.insert(visitas).values({
+            medico_id: vi.medico_id,
+            paciente_id: vi.paciente_id,
+            diagnostico_id: vi.diagnostico_id || null,
+            tratamiento: vi.tratamiento,
+            fecha: vi.fecha ? new Date(vi.fecha) : new Date(),
+            estado_id: vi.estado_id || 1,
+            codigo_verificacion: vi.codigo_verificacion,
+            activo: 'X'
+          }).returning();
+
+          if (vi.recetas && vi.recetas.length > 0) {
+            await db.insert(recetas).values(vi.recetas.map(r => ({
+              visita_id: vRow.id,
+              medicamento_id: r.medicamento_id,
+              tratamiento: r.tratamiento,
+              cantidad: r.cantidad || 1,
+              duracion: r.duracion,
+              estado: r.estado || 1,
+              farmaceuta_id: r.farmaceuta_id || null,
+              dispensado_fecha: r.dispensado_fecha ? new Date(r.dispensado_fecha) : null,
+              activo: 'X'
+            })));
+          }
         }
       }
     }
@@ -645,8 +753,14 @@ export function createExpressApp() {
     try {
       await ensureDbSynced();
 
-      let p = await db.select().from(pacientes).catch(() => []);
-      let m = await db.select().from(medicos).catch(() => []);
+      let p = await db.select().from(pacientes).catch((err) => {
+        console.error('Error fetching pacientes from DB:', err);
+        return [];
+      });
+      let m = await db.select().from(medicos).catch((err) => {
+        console.error('Error fetching medicos from DB:', err);
+        return [];
+      });
       let d = await db.select().from(diagnostico).catch(() => []);
       let meds = await db.select().from(medicamentos).catch(() => []);
       let ex = await db.select().from(examenes).catch(() => []);
@@ -682,11 +796,20 @@ export function createExpressApp() {
         examenes: ex.length > 0 ? ex : initialExamenes,
         farmacias: f.length > 0 ? f : initialFarmacias,
         farmaceutas: ph.length > 0 ? ph : initialFarmaceutas,
-        visitas: v
+        visitas: v.length > 0 ? v : initialVisitas
       });
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: String(e) });
+      console.error("[INIT ERROR]:", e);
+      res.json({
+        pacientes: initialPacientes,
+        medicos: initialMedicos,
+        diagnosticos: initialDiagnosticos,
+        medicamentos: initialMedicamentos,
+        examenes: initialExamenes,
+        farmacias: initialFarmacias,
+        farmaceutas: initialFarmaceutas,
+        visitas: initialVisitas
+      });
     }
   });
 
@@ -699,6 +822,124 @@ export function createExpressApp() {
         rut: data.rut, dv: data.dv, nombres: data.nombres, paterno: data.paterno, materno: data.materno,
         fecha_nacimiento: data.fecha_nacimiento || null, correo: data.correo, telefono: data.telefono, direccion: data.direccion
       }).returning();
+      res.json(result[0]);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  apiRouter.put('/pacientes/:id', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const { id } = req.params;
+      const data = req.body;
+      const result = await db.update(pacientes).set({
+        rut: data.rut, dv: data.dv, nombres: data.nombres, paterno: data.paterno, materno: data.materno,
+        fecha_nacimiento: data.fecha_nacimiento || null, correo: data.correo, telefono: data.telefono, direccion: data.direccion,
+        updatedAt: new Date()
+      }).where(eq(pacientes.id, Number(id))).returning();
+      res.json(result[0]);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // MEDICAMENTOS
+  apiRouter.post('/medicamentos', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const data = req.body;
+      const nextCode = `MED-${Math.floor(1000 + Math.random() * 9000)}`;
+      const result = await db.insert(medicamentos).values({
+        codigo: data.codigo || nextCode,
+        descripcion: data.descripcion,
+        laboratorio: data.laboratorio,
+        departamento: data.departamento,
+        restriccion: data.restriccion || 'Venta Directa',
+        forma_farmaceutica: data.forma_farmaceutica || 'Comprimido',
+        presentacion: data.presentacion,
+        activo: 'X'
+      }).returning();
+      res.json(result[0]);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  apiRouter.put('/medicamentos/:id', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const { id } = req.params;
+      const data = req.body;
+      const result = await db.update(medicamentos).set({
+        descripcion: data.descripcion,
+        laboratorio: data.laboratorio,
+        departamento: data.departamento,
+        restriccion: data.restriccion,
+        forma_farmaceutica: data.forma_farmaceutica,
+        presentacion: data.presentacion
+      }).where(eq(medicamentos.id, Number(id))).returning();
+      res.json(result[0]);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // MEDICOS
+  apiRouter.post('/medicos', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const data = req.body;
+      const result = await db.insert(medicos).values({
+        nombres: data.nombres,
+        apellidos: data.apellidos,
+        rut: data.rut,
+        dv: data.dv,
+        telefono: data.telefono,
+        correo: data.correo,
+        registro_minsal: data.registro_minsal,
+        especialidad: data.especialidad,
+        activo: 'X'
+      }).returning();
+      res.json(result[0]);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // EXAMENES
+  apiRouter.post('/examenes', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const data = req.body;
+      const nextCode = `EX-${Math.floor(100 + Math.random() * 900)}`;
+      const result = await db.insert(examenes).values({
+        codigo: data.codigo || nextCode,
+        nombre: data.nombre,
+        descripcion: data.descripcion,
+        activo: 'X'
+      }).returning();
+      res.json(result[0]);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  apiRouter.put('/examenes/:id', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const { id } = req.params;
+      const data = req.body;
+      const result = await db.update(examenes).set({
+        nombre: data.nombre,
+        descripcion: data.descripcion
+      }).where(eq(examenes.id, Number(id))).returning();
       res.json(result[0]);
     } catch (e) {
       console.error(e);
