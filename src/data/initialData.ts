@@ -159,20 +159,6 @@ export const initialPacientes: Paciente[] = [
     telefono: '+56 9 4321 0987',
     activo: 'X',
     created_at: '2025-02-01 16:20:00'
-  },
-  {
-    id: 6,
-    rut: '28152245',
-    dv: '0',
-    nombres: 'MAXIMILIANO',
-    paterno: 'LASTRA',
-    materno: 'ITURRIAGA',
-    fecha_nacimiento: '2024-05-23',
-    correo: 'nelsonlastra4@gmail.com',
-    direccion: 'Av. Providencia 1208, Santiago',
-    telefono: '+56934456811',
-    activo: 'X',
-    created_at: '2025-02-18 10:00:00'
   }
 ];
 
@@ -480,33 +466,6 @@ export const initialVisitas: Visita[] = [
         medicamento_id: 7,
         medicamento: initialMedicamentos[6],
         tratamiento: '1 comprimido sublingual cada 12 horas solo en caso de dolor severo por un máximo de 3 días.',
-        cantidad: 1,
-        duracion: '3 días',
-        estado: 1, // Pendiente
-        activo: 'X'
-      }
-    ]
-  },
-  {
-    id: 4,
-    medico_id: 4,
-    medico: initialMedicos[3],
-    paciente_id: 6,
-    paciente: initialPacientes[5],
-    diagnostico_id: 1,
-    diagnostico: initialDiagnosticos[0],
-    tratamiento: 'Control pediátrico general. Abundante hidratación oral y reposo.',
-    fecha: '2025-02-18 10:30:00',
-    estado_id: 1, // Activa / Pendiente
-    codigo_verificacion: 'ER-20250218-1677D',
-    activo: 'X',
-    recetas: [
-      {
-        id: 6,
-        visita_id: 4,
-        medicamento_id: 1,
-        medicamento: initialMedicamentos[0],
-        tratamiento: '1 dosis cada 8 horas según peso en caso de fiebre o molestias.',
         cantidad: 1,
         duracion: '3 días',
         estado: 1, // Pendiente
