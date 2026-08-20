@@ -16,12 +16,14 @@ import {
 
 interface VisitasViewProps {
   visitas: Visita[];
+  activeRole?: 'medico' | 'farmacia' | 'paciente' | null;
   onViewReceta: (visita: Visita) => void;
   onOpenQuemar: (visita: Visita) => void;
 }
 
 export const VisitasView: React.FC<VisitasViewProps> = ({
   visitas,
+  activeRole = 'medico',
   onViewReceta,
   onOpenQuemar
 }) => {
@@ -48,10 +50,12 @@ export const VisitasView: React.FC<VisitasViewProps> = ({
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <FileText className="w-5 h-5 text-[#0284c7]" />
-            Historial de Consultas y Recetas Médicas
+            {activeRole === 'farmacia' ? 'Bandeja General de Recetas Médicas' : 'Historial de Consultas y Recetas Médicas'}
           </h1>
           <p className="text-xs text-slate-500">
-            Registro de prescripciones electrónicas, medicamentos indicados y trazabilidad de retiro en farmacia.
+            {activeRole === 'farmacia' 
+              ? 'Consulta de recetas emitidas para validación en mesón, quema parcial o despacho total de medicamentos.' 
+              : 'Registro de prescripciones electrónicas, medicamentos indicados y trazabilidad de retiro en farmacia.'}
           </p>
         </div>
 

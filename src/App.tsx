@@ -143,18 +143,68 @@ export const App: React.FC = () => {
 
   const handleUpdatePaciente = (updatedPac: Paciente) => {
     setPacientes(prev => prev.map(p => p.id === updatedPac.id ? updatedPac : p));
+    fetch(`/api/pacientes/${updatedPac.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPac)
+    }).catch(err => console.error('Error updating patient in DB:', err));
   };
 
   const handleAddNewMedicamento = (newMed: Medicamento) => {
-    setMedicamentos(prev => [newMed, ...prev]);
+    const tempMed = { ...newMed, id: Date.now() };
+    setMedicamentos(prev => [tempMed, ...prev]);
+
+    fetch('/api/medicamentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMed)
+    })
+      .then(r => r.json())
+      .then(saved => {
+        setMedicamentos(prev => prev.map(m => m.id === tempMed.id ? saved : m));
+      })
+      .catch(err => console.error('Error creating medicamento in DB:', err));
   };
 
   const handleUpdateMedicamento = (updatedMed: Medicamento) => {
     setMedicamentos(prev => prev.map(m => m.id === updatedMed.id ? updatedMed : m));
+    fetch(`/api/medicamentos/${updatedMed.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedMed)
+    }).catch(err => console.error('Error updating medicamento in DB:', err));
+  };
+
+  const handleAddNewExamen = (newEx: Examen) => {
+    const tempEx = { ...newEx, id: Date.now() };
+    setExamenes(prev => [tempEx, ...prev]);
+
+    fetch('/api/examenes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newEx)
+    })
+      .then(r => r.json())
+      .then(saved => {
+        setExamenes(prev => prev.map(e => e.id === tempEx.id ? saved : e));
+      })
+      .catch(err => console.error('Error creating examen in DB:', err));
   };
 
   const handleAddNewMedico = (newMed: Medico) => {
-    setMedicos(prev => [...prev, newMed]);
+    const tempMed = { ...newMed, id: Date.now() };
+    setMedicos(prev => [...prev, tempMed]);
+
+    fetch('/api/medicos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMed)
+    })
+      .then(r => r.json())
+      .then(saved => {
+        setMedicos(prev => prev.map(m => m.id === tempMed.id ? saved : m));
+      })
+      .catch(err => console.error('Error creating medico in DB:', err));
   };
 
   const handleSaveVisita = (newVisita: Visita) => {
@@ -262,11 +312,12 @@ export const App: React.FC = () => {
         activeRole={activeRole}
         activeMedico={activeMedico}
         activeFarmacia={activeFarmacia}
+        activeFarmaceuta={activeFarmaceuta}
         onLogout={handleLogout}
       />
 
       <div className="flex-1 w-full flex overflow-hidden">
-        {currentTab !== 'verificador-publico' && currentTab !== 'login' && (
+        {isAuthenticated && currentTab !== 'login' && (
           <Sidebar
             currentTab={currentTab}
             onSelectTab={setCurrentTab}
@@ -287,6 +338,7 @@ export const App: React.FC = () => {
               visitas={visitas}
               pacientes={pacientes}
               medicamentos={medicamentos}
+              activeRole={activeRole}
               onSelectTab={setCurrentTab}
               onViewReceta={(v) => setSelectedVisitaForModal(v)}
               onOpenQuemar={(v) => {
@@ -305,12 +357,14 @@ export const App: React.FC = () => {
               activeMedico={activeMedico!}
               onSaveVisita={handleSaveVisita}
               onAddNewPaciente={handleAddNewPaciente}
+              onAddNewMedicamento={handleAddNewMedicamento}
             />
           )}
 
           {currentTab === 'visitas' && isAuthenticated && (
             <VisitasView
               visitas={visitas}
+              activeRole={activeRole}
               onViewReceta={(v) => setSelectedVisitaForModal(v)}
               onOpenQuemar={(v) => {
                 setQuickVerifyCode(v.codigo_verificacion);
@@ -340,8 +394,10 @@ export const App: React.FC = () => {
           {currentTab === 'examenes' && isAuthenticated && (
             <ExamenesView
               examenes={examenes}
-              onAddNewExamen={(ex) => console.log('Examen added:', ex)}
-              onUpdateExamen={(ex) => console.log('Examen updated:', ex)}
+              onAddNewExamen={handleAddNewExamen}
+              onUpdateExamen={(ex) => {
+                setExamenes(prev => prev.map(e => e.id === ex.id ? ex : e));
+              }}
             />
           )}
 
@@ -367,6 +423,15 @@ export const App: React.FC = () => {
           {currentTab === 'verificador-publico' && (
             <VerificadorPublicoView
               visitas={visitas}
+              isAuthenticated={isAuthenticated}
+              activeRole={activeRole}
+              onBackToMain={() => {
+                if (activeRole === 'farmacia') {
+                  setCurrentTab('farmacia-despacho');
+                } else {
+                  setCurrentTab('dashboard');
+                }
+              }}
               onViewReceta={(v) => setSelectedVisitaForModal(v)}
               initialCode={quickVerifyCode}
             />

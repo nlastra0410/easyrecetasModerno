@@ -12,10 +12,15 @@ declare global {
 
 export const createPool = () => {
   if (!global._postgresPool) {
+    const isNeonOrCloud = process.env.DATABASE_URL?.includes('neon.tech') || 
+                          process.env.DATABASE_URL?.includes('sslmode=require') ||
+                          process.env.NODE_ENV === 'production';
+
     global._postgresPool = new Pool({
       connectionString: process.env.DATABASE_URL,
+      ssl: isNeonOrCloud ? { rejectUnauthorized: false } : undefined,
       max: 10,
-      connectionTimeoutMillis: 15000,
+      connectionTimeoutMillis: 10000,
     });
 
     global._postgresPool.on('error', (err) => {

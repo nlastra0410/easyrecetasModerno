@@ -1,5 +1,5 @@
 import React from 'react';
-import { ViewTab, Medico, Farmacia } from '../types';
+import { ViewTab, Medico, Farmacia, Farmaceuta } from '../types';
 import { User, LogOut } from 'lucide-react';
 import { EasyLogo } from './EasyLogo';
 
@@ -10,6 +10,7 @@ interface NavbarProps {
   activeRole: 'medico' | 'farmacia' | 'paciente' | null;
   activeMedico?: Medico;
   activeFarmacia?: Farmacia;
+  activeFarmaceuta?: Farmaceuta;
   onLogout: () => void;
 }
 
@@ -19,6 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeRole,
   activeMedico,
   activeFarmacia,
+  activeFarmaceuta,
   onLogout
 }) => {
   return (
@@ -28,7 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Logo Section */}
         <div 
           className="cursor-pointer shrink-0" 
-          onClick={() => onSelectTab(isAuthenticated ? 'dashboard' : 'verificador-publico')}
+          onClick={() => onSelectTab(isAuthenticated ? (activeRole === 'farmacia' ? 'farmacia-despacho' : 'dashboard') : 'verificador-publico')}
         >
           <EasyLogo size="md" titleSecondPart="RECETAS" withSlogan={true} />
         </div>
@@ -56,10 +58,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                           ? `${activeMedico.nombres} ${activeMedico.apellidos || ''}`.trim()
                           : `Dr. ${activeMedico.nombres} ${activeMedico.apellidos || ''}`.trim())
                       : ''}
-                    {activeRole === 'farmacia' && activeFarmacia ? activeFarmacia.nombre : ''}
+                    {activeRole === 'farmacia'
+                      ? (activeFarmaceuta
+                          ? `${activeFarmaceuta.nombres} ${activeFarmaceuta.paterno || ''}`.trim()
+                          : (activeFarmacia?.nombre || 'Farmacéutico Responsable'))
+                      : ''}
                   </span>
                   <span className="text-[10px] text-sky-600 font-semibold uppercase tracking-wider mt-0.5">
-                    {activeRole === 'medico' ? 'Médico Tratante' : 'Farmacia'}
+                    {activeRole === 'medico' ? 'Médico Tratante' : 'Químico Farmacéutico'}
                   </span>
                 </div>
               </div>

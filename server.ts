@@ -310,6 +310,34 @@ async function syncDatabase() {
         // Individual record error
       }
     }
+
+    // Ensure farmaceutas in DB are also seeded/updated
+    for (const f of initialFarmaceutas) {
+      try {
+        const existingF = await db.query.farmaceutas.findFirst({
+          where: or(
+            eq(farmaceutas.rut, f.rut),
+            eq(farmaceutas.rut, `${f.rut}-${f.dv}`),
+            eq(farmaceutas.rut, `${f.rut}${f.dv}`)
+          )
+        });
+        if (!existingF) {
+          await db.insert(farmaceutas).values({
+            nombres: f.nombres,
+            paterno: f.paterno,
+            materno: f.materno,
+            rut: f.rut,
+            dv: f.dv,
+            farmacia_id: f.farmacia_id,
+            correo: f.correo,
+            activo: 'X'
+          });
+          console.log(`[DB INIT] Farmacéutico ${f.nombres} ${f.paterno} (${f.rut}-${f.dv}) registrado.`);
+        }
+      } catch (innerErr) {
+        // Individual record error
+      }
+    }
   } catch (dbSyncErr) {
     console.warn("[DB SYNC NOTICE] PostgreSQL no conectado aún o en proceso:", dbSyncErr);
   }
@@ -324,27 +352,52 @@ syncDatabase().catch(() => {});
       if (!rut) {
         return res.status(400).json({ error: "RUT es requerido." });
       }
-      const cleanRut = rut.replace(/[^0-9Kk]/g, '').toUpperCase();
+      const rawInput = String(rut).trim();
+      const cleanRut = rawInput.replace(/[^0-9Kk]/g, '').toUpperCase();
       const rutNum = cleanRut.length > 1 ? cleanRut.slice(0, -1) : cleanRut;
+      const dv = cleanRut.length > 1 ? cleanRut.slice(-1) : '';
 
       let medico: any = null;
       let farmaceuta: any = null;
 
+      // Helper function to match in-memory objects
+      const matchesRut = (person: any) => {
+        if (!person) return false;
+        const pRutRaw = String(person.rut || '').trim();
+        const pDvRaw = String(person.dv || '').trim().toUpperCase();
+        const pCleanRut = (pRutRaw + pDvRaw).replace(/[^0-9Kk]/g, '').toUpperCase();
+        const pRutNum = pRutRaw.replace(/[^0-9Kk]/g, '').toUpperCase();
+
+        return (
+          pCleanRut === cleanRut ||
+          pRutNum === cleanRut ||
+          pRutNum === rutNum ||
+          pRutRaw === rawInput ||
+          `${pRutRaw}-${pDvRaw}`.toUpperCase() === rawInput.toUpperCase() ||
+          `${pRutRaw}${pDvRaw}`.toUpperCase() === rawInput.toUpperCase()
+        );
+      };
+
       // 1. Try PostgreSQL if available
       if (process.env.DATABASE_URL) {
         try {
+          // Check medicos with exact match or LIKE
           medico = await db.query.medicos.findFirst({
             where: or(
               eq(medicos.rut, rutNum),
               eq(medicos.rut, cleanRut),
-              eq(medicos.rut, rut)
+              eq(medicos.rut, rawInput),
+              like(medicos.rut, `%${rutNum}%`)
             )
           });
+
+          // Check farmaceutas with exact match or LIKE
           farmaceuta = await db.query.farmaceutas.findFirst({
             where: or(
               eq(farmaceutas.rut, rutNum),
               eq(farmaceutas.rut, cleanRut),
-              eq(farmaceutas.rut, rut)
+              eq(farmaceutas.rut, rawInput),
+              like(farmaceutas.rut, `%${rutNum}%`)
             )
           });
         } catch (dbErr) {
@@ -354,19 +407,11 @@ syncDatabase().catch(() => {});
 
       // 2. Fallback to memory store if DB returned nothing or failed
       if (!medico) {
-        medico = memMedicos.find((m: any) => {
-          const mClean = (m.rut + (m.dv || '')).replace(/[^0-9Kk]/g, '').toUpperCase();
-          const mNum = m.rut.replace(/[^0-9Kk]/g, '').toUpperCase();
-          return mClean === cleanRut || mNum === rutNum || m.rut === rut || `${m.rut}-${m.dv}` === rut;
-        }) || null;
+        medico = memMedicos.find(matchesRut) || initialMedicos.find(matchesRut) || null;
       }
 
       if (!farmaceuta) {
-        farmaceuta = memFarmaceutas.find((f: any) => {
-          const fClean = (f.rut + (f.dv || '')).replace(/[^0-9Kk]/g, '').toUpperCase();
-          const fNum = f.rut.replace(/[^0-9Kk]/g, '').toUpperCase();
-          return fClean === cleanRut || fNum === rutNum || f.rut === rut || `${f.rut}-${f.dv}` === rut;
-        }) || null;
+        farmaceuta = memFarmaceutas.find(matchesRut) || initialFarmaceutas.find(matchesRut) || null;
       }
 
       if (!medico && !farmaceuta) {
@@ -576,7 +621,7 @@ syncDatabase().catch(() => {});
     });
   });
 
-  // PACIENTES
+  // PACIENTES - CREATE
   app.post("/api/pacientes", async (req, res) => {
     try {
       const data = req.body;
@@ -584,8 +629,16 @@ syncDatabase().catch(() => {});
       if (process.env.DATABASE_URL) {
         try {
           const result = await db.insert(pacientes).values({
-            rut: data.rut, dv: data.dv, nombres: data.nombres, paterno: data.paterno, materno: data.materno,
-            fecha_nacimiento: data.fecha_nacimiento || null, correo: data.correo, telefono: data.telefono, direccion: data.direccion
+            rut: String(data.rut || '').trim(),
+            dv: String(data.dv || '').trim().toUpperCase(),
+            nombres: String(data.nombres || '').trim(),
+            paterno: String(data.paterno || '').trim(),
+            materno: String(data.materno || '').trim(),
+            fecha_nacimiento: data.fecha_nacimiento || null,
+            correo: String(data.correo || '').trim(),
+            telefono: String(data.telefono || '').trim(),
+            direccion: String(data.direccion || '').trim(),
+            activo: 'X'
           }).returning();
           newPatient = result[0];
         } catch (dbErr) {
@@ -604,6 +657,167 @@ syncDatabase().catch(() => {});
       res.json(newPatient);
     } catch (e) {
       console.error(e);
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // PACIENTES - UPDATE
+  app.put("/api/pacientes/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const data = req.body;
+      let updated: any = null;
+
+      if (process.env.DATABASE_URL) {
+        try {
+          const result = await db.update(pacientes).set({
+            nombres: data.nombres,
+            paterno: data.paterno,
+            materno: data.materno,
+            correo: data.correo,
+            telefono: data.telefono,
+            direccion: data.direccion,
+            fecha_nacimiento: data.fecha_nacimiento || null,
+            updated_at: new Date()
+          }).where(eq(pacientes.id, id)).returning();
+          if (result.length > 0) updated = result[0];
+        } catch (dbErr) {
+          console.warn("[DB UPDATE ERROR pacientes]:", dbErr);
+        }
+      }
+
+      memPacientes = memPacientes.map(p => p.id === id ? { ...p, ...data } : p);
+      res.json(updated || { id, ...data });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // MEDICOS - CREATE
+  app.post("/api/medicos", async (req, res) => {
+    try {
+      const data = req.body;
+      let newMed: any = null;
+
+      if (process.env.DATABASE_URL) {
+        try {
+          const result = await db.insert(medicos).values({
+            nombres: String(data.nombres || '').trim(),
+            apellidos: String(data.apellidos || '').trim(),
+            rut: String(data.rut || '').trim(),
+            dv: String(data.dv || '').trim().toUpperCase(),
+            registro_minsal: String(data.registro_minsal || '').trim(),
+            especialidad: String(data.especialidad || data.profesion_nombre || 'Medicina General').trim(),
+            correo: String(data.correo || '').trim(),
+            telefono: String(data.telefono || '').trim(),
+            activo: 'X'
+          }).returning();
+          newMed = result[0];
+        } catch (dbErr) {
+          console.warn("[DB INSERT ERROR medicos]:", dbErr);
+        }
+      }
+
+      if (!newMed) {
+        newMed = { id: Date.now(), ...data, activo: 'X' };
+      }
+      memMedicos.push(newMed);
+      res.json(newMed);
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // MEDICAMENTOS - CREATE
+  app.post("/api/medicamentos", async (req, res) => {
+    try {
+      const data = req.body;
+      let newMed: any = null;
+
+      if (process.env.DATABASE_URL) {
+        try {
+          const result = await db.insert(medicamentos).values({
+            codigo: String(data.codigo || `MED-${Math.floor(1000 + Math.random() * 9000)}`),
+            descripcion: String(data.descripcion || '').trim(),
+            laboratorio: String(data.laboratorio || 'Laboratorio Chile').trim(),
+            departamento: String(data.departamento || 'Farmacología').trim(),
+            restriccion: String(data.restriccion || 'Venta Directa').trim(),
+            forma_farmaceutica: String(data.forma_farmaceutica || 'Comprimido').trim(),
+            presentacion: String(data.presentacion || 'Caja x 30').trim(),
+            activo: 'X'
+          }).returning();
+          newMed = result[0];
+        } catch (dbErr) {
+          console.warn("[DB INSERT ERROR medicamentos]:", dbErr);
+        }
+      }
+
+      if (!newMed) {
+        newMed = { id: Date.now(), ...data, activo: 'X' };
+      }
+      memMedicamentos.unshift(newMed);
+      res.json(newMed);
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // MEDICAMENTOS - UPDATE
+  app.put("/api/medicamentos/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const data = req.body;
+      let updated: any = null;
+
+      if (process.env.DATABASE_URL) {
+        try {
+          const result = await db.update(medicamentos).set({
+            descripcion: data.descripcion,
+            laboratorio: data.laboratorio,
+            departamento: data.departamento,
+            restriccion: data.restriccion,
+            forma_farmaceutica: data.forma_farmaceutica,
+            presentacion: data.presentacion
+          }).where(eq(medicamentos.id, id)).returning();
+          if (result.length > 0) updated = result[0];
+        } catch (dbErr) {
+          console.warn("[DB UPDATE ERROR medicamentos]:", dbErr);
+        }
+      }
+
+      memMedicamentos = memMedicamentos.map(m => m.id === id ? { ...m, ...data } : m);
+      res.json(updated || { id, ...data });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // EXAMENES - CREATE
+  app.post("/api/examenes", async (req, res) => {
+    try {
+      const data = req.body;
+      let newEx: any = null;
+
+      if (process.env.DATABASE_URL) {
+        try {
+          const result = await db.insert(examenes).values({
+            codigo: String(data.codigo || `EX-${Math.floor(100 + Math.random() * 900)}`),
+            nombre: String(data.nombre || '').trim(),
+            descripcion: data.descripcion ? String(data.descripcion).trim() : null,
+            activo: 'X'
+          }).returning();
+          newEx = result[0];
+        } catch (dbErr) {
+          console.warn("[DB INSERT ERROR examenes]:", dbErr);
+        }
+      }
+
+      if (!newEx) {
+        newEx = { id: Date.now(), ...data, activo: 'X' };
+      }
+      memExamenes.unshift(newEx);
+      res.json(newEx);
+    } catch (e) {
       res.status(500).json({ error: String(e) });
     }
   });
@@ -633,10 +847,10 @@ syncDatabase().catch(() => {});
           if (visita.recetas && visita.recetas.length > 0) {
             await db.insert(recetas).values(visita.recetas.map((r: any) => ({
               visita_id: vId,
-              medicamento_id: r.medicamento_id,
-              tratamiento: r.tratamiento,
-              cantidad: r.cantidad,
-              duracion: r.duracion,
+              medicamento_id: Number(r.medicamento_id) || 1,
+              tratamiento: r.tratamiento?.trim() || 'Según indicación médica',
+              cantidad: Number(r.cantidad) || 1,
+              duracion: r.duracion?.trim() || 'Según evolución',
               estado: 1,
               activo: 'X'
             })));
@@ -707,6 +921,21 @@ syncDatabase().catch(() => {});
       }
 
       memVisitas.unshift(completeVisita);
+
+      // US-10: Despacho automático de correo electrónico al paciente
+      const patientEmail = completeVisita.paciente?.correo?.trim();
+      if (patientEmail && patientEmail.includes('@')) {
+        sendPrescriptionEmail(patientEmail, completeVisita)
+          .then((sent) => {
+            if (sent) {
+              console.log(`[US-10] Receta enviada exitosamente por correo a ${patientEmail}`);
+            }
+          })
+          .catch((mailErr) => {
+            console.warn(`[US-10] Error enviando correo de receta a ${patientEmail}:`, mailErr);
+          });
+      }
+
       res.json(completeVisita);
     } catch (e) {
       console.error(e);

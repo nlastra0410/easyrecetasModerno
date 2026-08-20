@@ -19,6 +19,7 @@ interface DashboardViewProps {
   visitas: Visita[];
   pacientes: Paciente[];
   medicamentos: Medicamento[];
+  activeRole?: 'medico' | 'farmacia' | 'paciente' | null;
   onSelectTab: (tab: ViewTab) => void;
   onViewReceta: (visita: Visita) => void;
   onOpenQuemar: (visita: Visita) => void;
@@ -28,10 +29,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   visitas,
   pacientes,
   medicamentos,
+  activeRole = 'medico',
   onSelectTab,
   onViewReceta,
   onOpenQuemar
 }) => {
+  const isFarmacia = activeRole === 'farmacia';
   const totalVisitas = visitas.length;
   const emitidasPendientes = visitas.filter((v) => v.estado_id === 1).length;
   const parciales = visitas.filter((v) => v.estado_id === 2).length;
@@ -49,29 +52,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="space-y-2 max-w-xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-sky-200 text-xs font-semibold border border-white/20">
             <CheckCircle2 className="w-3.5 h-3.5 text-sky-300" />
-            Sistema Operativo y Seguro
+            {isFarmacia ? 'Módulo de Validación y Dispensación Farmacéutica' : 'Sistema Clínico Operativo y Seguro'}
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Gestión Integral de Recetas Médicas
+            {isFarmacia ? 'Dispensación y Quema de Recetas en Farmacia' : 'Gestión Integral de Recetas Médicas'}
           </h1>
           <p className="text-sky-100/90 text-sm leading-relaxed">
-            Plataforma digital para la emisión rápida, seguimiento y dispensación de recetas médicas electrónicas con validación MINSAL.
+            {isFarmacia 
+              ? 'Verificación criptográfica, validación en línea con MINSAL y control de dispensación/quemado parcial y total de medicamentos.' 
+              : 'Plataforma digital para la emisión rápida, seguimiento y dispensación de recetas médicas electrónicas con validación MINSAL.'}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => onSelectTab('nueva-receta')}
-            className="px-5 py-2.5 bg-white hover:bg-sky-50 text-[#0284c7] font-bold rounded-xl text-sm flex items-center gap-2 transition-all shadow-md cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4 text-[#0284c7]" />
-            Emitir Nueva Receta
-          </button>
+          {!isFarmacia && (
+            <button
+              onClick={() => onSelectTab('nueva-receta')}
+              className="px-5 py-2.5 bg-white hover:bg-sky-50 text-[#0284c7] font-bold rounded-xl text-sm flex items-center gap-2 transition-all shadow-md cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4 text-[#0284c7]" />
+              Emitir Nueva Receta
+            </button>
+          )}
           <button
             onClick={() => onSelectTab('farmacia-despacho')}
-            className="px-4 py-2.5 bg-sky-900/60 hover:bg-sky-900 text-white font-semibold rounded-xl text-sm flex items-center gap-2 transition-all border border-sky-400/30 cursor-pointer"
+            className={`px-5 py-2.5 font-bold rounded-xl text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md ${
+              isFarmacia
+                ? 'bg-white hover:bg-sky-50 text-[#0284c7]'
+                : 'bg-sky-900/60 hover:bg-sky-900 text-white border border-sky-400/30'
+            }`}
           >
-            <Building2 className="w-4 h-4 text-sky-300" />
+            <Building2 className="w-4 h-4" />
             Dispensar en Farmacia
           </button>
         </div>
@@ -202,35 +213,71 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </h3>
 
             <div className="space-y-2">
-              <button
-                onClick={() => onSelectTab('nueva-receta')}
-                className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition-all flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-[#0284c7] flex items-center justify-center group-hover:bg-[#0284c7] group-hover:text-white transition-colors">
-                    <PlusCircle className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Nueva Prescripción</p>
-                    <p className="text-xs text-slate-500">Crear receta con código digital</p>
-                  </div>
-                </div>
-              </button>
+              {isFarmacia ? (
+                <>
+                  <button
+                    onClick={() => onSelectTab('farmacia-despacho')}
+                    className="w-full text-left p-3 rounded-xl border border-sky-200 bg-sky-50/40 hover:border-sky-400 hover:bg-sky-50 transition-all flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#0284c7] text-white flex items-center justify-center shadow-xs">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Dispensar y Quemar</p>
+                        <p className="text-xs text-slate-500">Validar y dispensar receta por RUT/QR</p>
+                      </div>
+                    </div>
+                  </button>
 
-              <button
-                onClick={() => onSelectTab('pacientes')}
-                className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition-all flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                    <Users className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Buscar Pacientes</p>
-                    <p className="text-xs text-slate-500">Ver historiales clínicos y RUTs</p>
-                  </div>
-                </div>
-              </button>
+                  <button
+                    onClick={() => onSelectTab('visitas')}
+                    className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition-all flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-800 flex items-center justify-center group-hover:bg-sky-600 group-hover:text-white transition-colors">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Historial de Recetas</p>
+                        <p className="text-xs text-slate-500">Auditar estados y prescripciones</p>
+                      </div>
+                    </div>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => onSelectTab('nueva-receta')}
+                    className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition-all flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-sky-100 text-[#0284c7] flex items-center justify-center group-hover:bg-[#0284c7] group-hover:text-white transition-colors">
+                        <PlusCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Nueva Prescripción</p>
+                        <p className="text-xs text-slate-500">Crear receta con código digital</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => onSelectTab('pacientes')}
+                    className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition-all flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Buscar Pacientes</p>
+                        <p className="text-xs text-slate-500">Ver historiales clínicos y RUTs</p>
+                      </div>
+                    </div>
+                  </button>
+                </>
+              )}
 
               <button
                 onClick={() => onSelectTab('medicamentos')}
@@ -242,7 +289,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-slate-900">Vademécum Farmacéutico</p>
-                    <p className="text-xs text-slate-500">Explorar o agregar fármacos</p>
+                    <p className="text-xs text-slate-500">Explorar catálogo de fármacos</p>
                   </div>
                 </div>
               </button>

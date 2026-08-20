@@ -159,6 +159,20 @@ export const initialPacientes: Paciente[] = [
     telefono: '+56 9 4321 0987',
     activo: 'X',
     created_at: '2025-02-01 16:20:00'
+  },
+  {
+    id: 6,
+    rut: '28152245',
+    dv: '0',
+    nombres: 'MAXIMILIANO',
+    paterno: 'LASTRA',
+    materno: 'ITURRIAGA',
+    fecha_nacimiento: '2024-05-23',
+    correo: 'nlastra@outlook.cl',
+    direccion: '',
+    telefono: '',
+    activo: 'X',
+    created_at: '2026-08-19 16:54:53'
   }
 ];
 
@@ -289,16 +303,24 @@ export const initialMedicamentos: Medicamento[] = [
 ];
 
 export const initialExamenes: Examen[] = [
-  { id: 1, codigo: 'EX-001', nombre: 'Hemograma Completo', activo: 'X' },
-  { id: 2, codigo: 'EX-002', nombre: 'Perfil Lipídico', activo: 'X' },
-  { id: 3, codigo: 'EX-003', nombre: 'Glicemia en Ayunas', activo: 'X' },
-  { id: 4, codigo: 'EX-004', nombre: 'Creatinina en Sangre', activo: 'X' },
-  { id: 5, codigo: 'EX-005', nombre: 'Orina Completa (Urocultivo)', activo: 'X' },
-  { id: 6, codigo: 'EX-006', nombre: 'Radiografía de Tórax AP y Lateral', activo: 'X' },
-  { id: 7, codigo: 'EX-007', nombre: 'Electrocardiograma de Reposo (ECG)', activo: 'X' },
-  { id: 8, codigo: 'EX-008', nombre: 'Ecografía Abdominal', activo: 'X' },
-  { id: 9, codigo: 'EX-009', nombre: 'TSH y Hormonas Tiroideas', activo: 'X' },
-  { id: 10, codigo: 'EX-010', nombre: 'Antígeno Prostático Específico (PSA)', activo: 'X' }
+  // Exámenes Generales
+  { id: 1, codigo: 'EX-001', nombre: 'Hemograma Completo', categoria: 'General', descripcion: 'Recuento globular, fórmula leucocitaria y plaquetas', activo: 'X' },
+  { id: 2, codigo: 'EX-002', nombre: 'Perfil Lipídico', categoria: 'General', descripcion: 'Colesterol total, HDL, LDL y triglicéridos', activo: 'X' },
+  { id: 3, codigo: 'EX-003', nombre: 'Glicemia en Ayunas', categoria: 'General', descripcion: 'Nivel de glucosa basal', activo: 'X' },
+  { id: 4, codigo: 'EX-004', nombre: 'Creatinina en Sangre', categoria: 'General', descripcion: 'Evaluación de función renal y filtración', activo: 'X' },
+  { id: 5, codigo: 'EX-005', nombre: 'Orina Completa (Urocultivo)', categoria: 'General', descripcion: 'Sedimento urinario y cultivo bacteriano', activo: 'X' },
+  { id: 6, codigo: 'EX-006', nombre: 'Radiografía de Tórax AP y Lateral', categoria: 'General', descripcion: 'Estudio de campos pulmonares y silueta cardíaca', activo: 'X' },
+  { id: 7, codigo: 'EX-007', nombre: 'Electrocardiograma de Reposo (ECG)', categoria: 'General', descripcion: 'Trazado eléctrico cardíaco de 12 derivaciones', activo: 'X' },
+  { id: 8, codigo: 'EX-008', nombre: 'Ecografía Abdominal', categoria: 'General', descripcion: 'Visualización de hígado, vesícula, bazo y riñones', activo: 'X' },
+  { id: 9, codigo: 'EX-009', nombre: 'TSH y Hormonas Tiroideas', categoria: 'General', descripcion: 'Tamizaje y control de función tiroidea', activo: 'X' },
+  { id: 10, codigo: 'EX-010', nombre: 'Antígeno Prostático Específico (PSA)', categoria: 'General', descripcion: 'Marcador prostático total y libre', activo: 'X' },
+  
+  // Exámenes Odontológicos / Dentales (US-07)
+  { id: 11, codigo: 'EX-101', nombre: 'Radiografía Panorámica Digital (Ortopantomografía)', categoria: 'Odontologico', descripcion: 'Evaluación integral maxilomandibular y piezas dentarias', activo: 'X' },
+  { id: 12, codigo: 'EX-102', nombre: 'Radiografía Bitewing (Aleta Mordida Bilateral)', categoria: 'Odontologico', descripcion: 'Detección de caries interproximales y cresta ósea alveolar', activo: 'X' },
+  { id: 13, codigo: 'EX-103', nombre: 'Radiografía Periapical Seriada / Aislada', categoria: 'Odontologico', descripcion: 'Visualización de raíz dental, ápice y tejido periapical', activo: 'X' },
+  { id: 14, codigo: 'EX-104', nombre: 'Tomografía Cone Beam Maxilofacial (CBCT)', categoria: 'Odontologico', descripcion: 'Estudio 3D volumétrico para implantes y endodoncia', activo: 'X' },
+  { id: 15, codigo: 'EX-105', nombre: 'Telerradiografía Lateral de Cráneo con Cefalometría', categoria: 'Odontologico', descripcion: 'Planificación de ortodoncia y ortopedia maxilar', activo: 'X' }
 ];
 
 export const initialFarmacias: Farmacia[] = [
@@ -356,6 +378,33 @@ export const initialFarmaceutas: Farmaceuta[] = [
     farmacia_id: 2,
     farmacia_nombre: 'Farmacia Salcobrand - Las Condes',
     correo: 'carolina.figueroa@salcobrand.cl',
+    activo: 'X'
+  },
+  {
+    id: 3,
+    user_id: 103,
+    nombres: 'Hans',
+    paterno: 'Lembach',
+    materno: 'Palma',
+    rut: '12792034',
+    dv: '6',
+    farmacia_id: 1,
+    farmacia_nombre: 'Farmacia Cruz Verde - Providencia',
+    correo: 'hplembac@uc.cl',
+    activo: 'X'
+  },
+  {
+    id: 4,
+    user_id: 104,
+    nombres: 'Vicente Andres',
+    paterno: 'Saavedra',
+    materno: 'Rojas',
+    rut: '18731753',
+    dv: '3',
+    farmacia_id: 2,
+    farmacia_nombre: 'Farmacia Salcobrand - Las Condes',
+    correo: 'nelsonlastra4@gmail.com',
+    telefono: '+56934456811',
     activo: 'X'
   }
 ];

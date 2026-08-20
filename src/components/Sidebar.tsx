@@ -30,7 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'dashboard' as ViewTab,
       label: 'Panel Principal',
       icon: LayoutDashboard,
-      roles: ['medico', 'farmacia', 'paciente']
+      roles: ['medico']
     },
     {
       id: 'nueva-receta' as ViewTab,
@@ -40,28 +40,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       roles: ['medico']
     },
     {
-      id: 'visitas' as ViewTab,
-      label: 'Historial de Recetas',
-      icon: FileText,
-      count: pendingVisitasCount > 0 ? pendingVisitasCount : undefined,
-      roles: ['medico', 'farmacia', 'paciente']
+      id: 'farmacia-despacho' as ViewTab,
+      label: 'Dispensación y Quema',
+      icon: Building2,
+      badge: 'QF',
+      roles: ['farmacia']
     },
     {
-      id: 'farmacia-despacho' as ViewTab,
-      label: 'Dispensar en Farmacia',
-      icon: Building2,
-      badge: 'Quemar',
-      roles: ['farmacia', 'medico']
+      id: 'visitas' as ViewTab,
+      label: activeRole === 'farmacia' ? 'Bandeja de Recetas' : 'Historial de Recetas',
+      icon: FileText,
+      count: pendingVisitasCount > 0 ? pendingVisitasCount : undefined,
+      roles: ['medico', 'farmacia']
     },
     {
       id: 'pacientes' as ViewTab,
       label: 'Fichas de Pacientes',
       icon: Users,
-      roles: ['medico', 'farmacia']
+      roles: ['medico']
     },
     {
       id: 'medicamentos' as ViewTab,
-      label: 'Catálogo de Fármacos',
+      label: activeRole === 'farmacia' ? 'Vademécum Farmacéutico' : 'Catálogo de Fármacos',
       icon: Pill,
       roles: ['medico', 'farmacia']
     },
@@ -75,13 +75,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'medicos' as ViewTab,
       label: 'Cuerpo Médico',
       icon: Stethoscope,
-      roles: ['medico', 'farmacia']
+      roles: ['medico']
     },
     {
       id: 'verificador-publico' as ViewTab,
       label: 'Validación Pública',
       icon: ShieldCheck,
-      roles: ['medico', 'farmacia', 'paciente']
+      roles: ['medico', 'farmacia']
     }
   ];
 

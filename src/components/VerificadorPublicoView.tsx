@@ -20,7 +20,9 @@ import {
   Lock,
   PhoneCall,
   Activity,
-  Award
+  Award,
+  ArrowLeft,
+  LayoutDashboard
 } from 'lucide-react';
 import { EasyLogo } from './EasyLogo';
 
@@ -28,12 +30,18 @@ interface VerificadorPublicoViewProps {
   visitas: Visita[];
   onViewReceta: (visita: Visita) => void;
   initialCode?: string;
+  isAuthenticated?: boolean;
+  activeRole?: 'medico' | 'farmacia' | 'paciente' | null;
+  onBackToMain?: () => void;
 }
 
 export const VerificadorPublicoView: React.FC<VerificadorPublicoViewProps> = ({
   visitas,
   onViewReceta,
-  initialCode = ''
+  initialCode = '',
+  isAuthenticated = false,
+  activeRole,
+  onBackToMain
 }) => {
   const [code, setCode] = useState(initialCode);
   const [result, setResult] = useState<Visita | null>(() => {
@@ -93,6 +101,22 @@ export const VerificadorPublicoView: React.FC<VerificadorPublicoViewProps> = ({
         <div className="absolute left-1/3 bottom-0 w-80 h-80 bg-sky-300/20 rounded-full blur-2xl pointer-events-none"></div>
 
         <div className="max-w-5xl mx-auto space-y-6 relative z-10 text-center sm:text-left">
+          {isAuthenticated && onBackToMain && (
+            <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-white/15">
+              <button
+                onClick={onBackToMain}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/20 hover:bg-white text-white hover:text-[#0284c7] text-sm font-bold transition-all shadow-sm border border-white/30 cursor-pointer group"
+              >
+                <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                <span>Volver al Menú Principal ({activeRole === 'farmacia' ? 'Módulo Farmacia' : 'Panel Médico'})</span>
+              </button>
+
+              <span className="text-xs text-sky-100/90 font-medium">
+                Sesión activa como {activeRole === 'farmacia' ? 'Químico Farmacéutico' : 'Médico Tratante'}
+              </span>
+            </div>
+          )}
+
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 backdrop-blur-xs border border-white/20 text-sky-100 text-xs font-semibold tracking-wide shadow-xs">
             <ShieldCheck className="w-4 h-4 text-sky-300" />
             Portal Oficial de Verificación Sanitaria en Línea

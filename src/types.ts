@@ -58,6 +58,7 @@ export interface Examen {
   codigo: string;
   nombre: string;
   descripcion?: string;
+  categoria?: 'General' | 'Odontologico' | string;
   activo: string;
 }
 
