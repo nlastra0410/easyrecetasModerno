@@ -134,6 +134,7 @@ export interface Farmaceuta {
   farmacia_id: number;
   farmacia_nombre?: string;
   correo: string;
+  telefono?: string;
   activo: string;
 }
 

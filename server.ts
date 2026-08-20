@@ -13,9 +13,10 @@ import {
   visitas,
   recetas,
   orden_examenes,
-  epicrisis
+  epicrisis,
+  authTokensTable
 } from "./src/db/schema.js";
-import { eq, like, or, sql } from 'drizzle-orm';
+import { eq, like, or, sql, desc, and } from 'drizzle-orm';
 import {
   initialPacientes,
   initialMedicos,
@@ -28,6 +29,65 @@ import {
 } from "./src/data/initialData.js";
 import twilio from 'twilio';
 import nodemailer from 'nodemailer';
+
+// Helper to normalize any date input to PostgreSQL YYYY-MM-DD or null
+function normalizeDateForDb(val: any): string | null {
+  if (!val) return null;
+  const str = String(val).trim();
+  if (!str || str === 'EMPTY_STRING') return null;
+  // If DD-MM-YYYY or DD/MM/YYYY
+  if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(str)) {
+    const parts = str.split(/[-/]/);
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  // If YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.substring(0, 10);
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+  return null;
+}
+
+// Clean string helper (treat 'EMPTY_STRING' or blank as empty string or clean string)
+function cleanStr(val: any): string {
+  if (val === undefined || val === null || val === 'EMPTY_STRING') return '';
+  return String(val).trim();
+}
+
+// Robust RUT parser helper
+function parseRutParts(rutInput: any, dvInput?: any) {
+  const rawRut = String(rutInput || '').trim();
+  const rawDv = String(dvInput || '').trim();
+
+  // If dv is explicitly provided separately (e.g. rut: "28152245", dv: "0")
+  if (rawDv) {
+    const cleanCuerpo = rawRut.replace(/[^0-9]/g, '');
+    const cleanDv = rawDv.replace(/[^0-9Kk]/g, '').toUpperCase();
+    return {
+      cuerpo: cleanCuerpo,
+      dv: cleanDv,
+      fullRut: `${cleanCuerpo}-${cleanDv}`,
+      cleanCombined: `${cleanCuerpo}${cleanDv}`
+    };
+  }
+
+  // If rut contains both body and dv together (e.g. "28152245-0" or "281522450")
+  const cleanAll = rawRut.replace(/[^0-9Kk]/g, '').toUpperCase();
+  if (cleanAll.length <= 1) {
+    return { cuerpo: cleanAll, dv: '', fullRut: cleanAll, cleanCombined: cleanAll };
+  }
+  const cleanCuerpo = cleanAll.slice(0, -1);
+  const cleanDv = cleanAll.slice(-1);
+  return {
+    cuerpo: cleanCuerpo,
+    dv: cleanDv,
+    fullRut: `${cleanCuerpo}-${cleanDv}`,
+    cleanCombined: cleanAll
+  };
+}
 
 // Token memory store
 const authTokens = new Map<string, { token: string, user: any, role: string, expires: number }>();
@@ -338,8 +398,40 @@ async function syncDatabase() {
         // Individual record error
       }
     }
+
+    // Clean any legacy 'EMPTY_STRING' text in DB
+    try {
+      await db.execute(sql`UPDATE pacientes SET telefono = NULL WHERE telefono = 'EMPTY_STRING';`);
+      await db.execute(sql`UPDATE pacientes SET direccion = NULL WHERE direccion = 'EMPTY_STRING';`);
+      await db.execute(sql`UPDATE pacientes SET correo = NULL WHERE correo = 'EMPTY_STRING';`);
+      await db.execute(sql`UPDATE pacientes SET materno = NULL WHERE materno = 'EMPTY_STRING';`);
+    } catch {}
+
+    // Only seed initial patients if table is completely empty
+    const existingPacientesCount = await db.select({ id: pacientes.id }).from(pacientes);
+    if (existingPacientesCount.length === 0) {
+      for (const p of initialPacientes) {
+        try {
+          const { cuerpo, dv } = parseRutParts(p.rut, p.dv);
+          await db.insert(pacientes).values({
+            rut: cuerpo,
+            dv: dv || p.dv || '0',
+            nombres: p.nombres,
+            paterno: p.paterno,
+            materno: p.materno || null,
+            fecha_nacimiento: p.fecha_nacimiento ? normalizeDateForDb(p.fecha_nacimiento) : null,
+            correo: p.correo || null,
+            telefono: p.telefono || null,
+            direccion: p.direccion || null,
+            activo: p.activo || 'X'
+          });
+        } catch (innerErr) {
+          // Ignore
+        }
+      }
+    }
   } catch (dbSyncErr) {
-    console.warn("[DB SYNC NOTICE] PostgreSQL no conectado aún o en proceso:", dbSyncErr);
+    console.warn("[DB SYNC NOTICE] PostgreSQL:", dbSyncErr);
   }
 }
 // Call syncDatabase in the background unconditionally
@@ -423,10 +515,42 @@ syncDatabase().catch(() => {});
       
       // Generate secure 6-digit token
       const token = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       
       // Store token (expires in 5 minutes)
-      authTokens.set(cleanRut, { token, user, role, expires: Date.now() + 5 * 60 * 1000 });
-      authTokens.set(rutNum, { token, user, role, expires: Date.now() + 5 * 60 * 1000 });
+      authTokens.set(cleanRut, { token, user, role, expires: expiresAt.getTime() });
+      authTokens.set(rutNum, { token, user, role, expires: expiresAt.getTime() });
+
+      // Store in PostgreSQL database for multi-instance serverless resilience (Vercel)
+      if (process.env.DATABASE_URL) {
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS auth_tokens (
+              id SERIAL PRIMARY KEY,
+              rut VARCHAR(50) NOT NULL,
+              token VARCHAR(20) NOT NULL,
+              user_data TEXT,
+              role VARCHAR(50) NOT NULL,
+              expires_at TIMESTAMP NOT NULL,
+              created_at TIMESTAMP DEFAULT NOW()
+            )
+          `);
+
+          // Clean old tokens for this rut
+          await db.execute(sql`DELETE FROM auth_tokens WHERE rut = ${cleanRut} OR rut = ${rutNum} OR expires_at < NOW()`);
+
+          // Insert new token
+          await db.insert(authTokensTable).values({
+            rut: cleanRut,
+            token: token,
+            userData: JSON.stringify(user),
+            role: role,
+            expiresAt: expiresAt
+          });
+        } catch (dbTokenErr) {
+          console.warn("[DB AUTH TOKEN PERSIST WARN]:", dbTokenErr);
+        }
+      }
 
       // 1. Send Real SMS if Twilio is configured
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -484,9 +608,46 @@ syncDatabase().catch(() => {});
   app.post("/api/auth/verify-token", async (req, res) => {
     try {
       const { rut, token } = req.body;
-      const cleanRut = rut.replace(/[^0-9Kk]/g, '').toUpperCase();
-      const rutNum = cleanRut.length > 1 ? cleanRut.slice(0, -1) : cleanRut;
+      if (!rut || !token) {
+        return res.status(400).json({ error: "RUT y código son requeridos." });
+      }
 
+      const cleanRut = String(rut).replace(/[^0-9Kk]/g, '').toUpperCase();
+      const rutNum = cleanRut.length > 1 ? cleanRut.slice(0, -1) : cleanRut;
+      const inputToken = String(token).trim();
+
+      // 1. Try DB first for multi-instance support (Vercel)
+      if (process.env.DATABASE_URL) {
+        try {
+          const dbTokens = await db.select().from(authTokensTable).where(
+            and(
+              or(eq(authTokensTable.rut, cleanRut), eq(authTokensTable.rut, rutNum)),
+              eq(authTokensTable.token, inputToken)
+            )
+          ).orderBy(desc(authTokensTable.id));
+
+          if (dbTokens.length > 0) {
+            const tokenRecord = dbTokens[0];
+            const isExpired = new Date(tokenRecord.expiresAt).getTime() < Date.now();
+            
+            // Delete used token from DB
+            await db.execute(sql`DELETE FROM auth_tokens WHERE rut = ${cleanRut} OR rut = ${rutNum}`);
+            authTokens.delete(cleanRut);
+            authTokens.delete(rutNum);
+
+            if (isExpired) {
+              return res.status(400).json({ error: "El token ha expirado. Solicite uno nuevo." });
+            }
+
+            const userData = tokenRecord.userData ? JSON.parse(tokenRecord.userData) : null;
+            return res.json({ user: userData, role: tokenRecord.role });
+          }
+        } catch (dbVerifyErr) {
+          console.warn("[DB VERIFY TOKEN WARN]:", dbVerifyErr);
+        }
+      }
+
+      // 2. Try in-memory store
       const authData = authTokens.get(cleanRut) || authTokens.get(rutNum);
 
       if (!authData) {
@@ -499,7 +660,7 @@ syncDatabase().catch(() => {});
         return res.status(400).json({ error: "El token ha expirado. Solicite uno nuevo." });
       }
 
-      if (authData.token !== token.trim()) {
+      if (authData.token !== inputToken) {
         return res.status(400).json({ error: "Código de seguridad incorrecto." });
       }
 
@@ -625,36 +786,91 @@ syncDatabase().catch(() => {});
   app.post("/api/pacientes", async (req, res) => {
     try {
       const data = req.body;
-      let newPatient: any = null;
+      const { cuerpo, dv, cleanCombined } = parseRutParts(data.rut, data.dv);
+      const nombres = cleanStr(data.nombres);
+      const paterno = cleanStr(data.paterno);
+      const materno = cleanStr(data.materno);
+      const correo = cleanStr(data.correo);
+      const telefono = cleanStr(data.telefono);
+      const direccion = cleanStr(data.direccion);
+      const fechaNac = normalizeDateForDb(data.fecha_nacimiento);
+
+      let savedPatient: any = null;
+
       if (process.env.DATABASE_URL) {
         try {
-          const result = await db.insert(pacientes).values({
-            rut: String(data.rut || '').trim(),
-            dv: String(data.dv || '').trim().toUpperCase(),
-            nombres: String(data.nombres || '').trim(),
-            paterno: String(data.paterno || '').trim(),
-            materno: String(data.materno || '').trim(),
-            fecha_nacimiento: data.fecha_nacimiento || null,
-            correo: String(data.correo || '').trim(),
-            telefono: String(data.telefono || '').trim(),
-            direccion: String(data.direccion || '').trim(),
-            activo: 'X'
-          }).returning();
-          newPatient = result[0];
+          // Check if patient already exists by RUT or ID
+          const existing = await db.select().from(pacientes).where(
+            or(
+              eq(pacientes.rut, cuerpo),
+              eq(pacientes.rut, cleanCombined),
+              eq(pacientes.rut, String(data.rut || '').trim()),
+              data.id && typeof data.id === 'number' && data.id < 1000000000 ? eq(pacientes.id, data.id) : undefined
+            )
+          );
+
+          if (existing.length > 0) {
+            // Update existing patient
+            const updated = await db.update(pacientes).set({
+              dv: dv || existing[0].dv,
+              nombres: nombres || existing[0].nombres,
+              paterno: paterno || existing[0].paterno,
+              materno: materno || existing[0].materno,
+              fecha_nacimiento: fechaNac || existing[0].fecha_nacimiento,
+              correo: correo || existing[0].correo,
+              telefono: telefono || existing[0].telefono,
+              direccion: direccion || existing[0].direccion,
+              activo: 'X',
+              updatedAt: new Date()
+            }).where(eq(pacientes.id, existing[0].id)).returning();
+            if (updated.length > 0) savedPatient = updated[0];
+          } else {
+            // Insert new patient
+            const result = await db.insert(pacientes).values({
+              rut: cuerpo,
+              dv: dv || '0',
+              nombres: nombres,
+              paterno: paterno,
+              materno: materno || null,
+              fecha_nacimiento: fechaNac,
+              correo: correo || null,
+              telefono: telefono || null,
+              direccion: direccion || null,
+              activo: 'X'
+            }).returning();
+            if (result.length > 0) savedPatient = result[0];
+          }
         } catch (dbErr) {
-          console.warn("[DB INSERT ERROR pacientes]:", dbErr);
+          console.error("[DB INSERT/UPDATE ERROR pacientes]:", dbErr);
         }
       }
-      if (!newPatient) {
-        newPatient = {
-          id: Date.now(),
-          ...data,
+
+      if (!savedPatient) {
+        savedPatient = {
+          id: data.id || Date.now(),
+          rut: cuerpo,
+          dv: dv,
+          nombres,
+          paterno,
+          materno,
+          fecha_nacimiento: fechaNac || data.fecha_nacimiento,
+          correo,
+          telefono,
+          direccion,
           activo: 'X',
           created_at: new Date().toISOString()
         };
       }
-      memPacientes.unshift(newPatient);
-      res.json(newPatient);
+
+      // Update in-memory fallback
+      const existingIdx = memPacientes.findIndex(p => p.id === savedPatient.id || (p.rut === savedPatient.rut && p.dv === savedPatient.dv) || p.rut === cuerpo);
+      if (existingIdx >= 0) {
+        memPacientes[existingIdx] = savedPatient;
+      } else {
+        memPacientes.unshift(savedPatient);
+      }
+
+      res.json(savedPatient);
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: String(e) });
@@ -666,29 +882,119 @@ syncDatabase().catch(() => {});
     try {
       const id = Number(req.params.id);
       const data = req.body;
+      const { cuerpo, dv, cleanCombined } = parseRutParts(data.rut, data.dv);
+      const nombres = cleanStr(data.nombres);
+      const paterno = cleanStr(data.paterno);
+      const materno = cleanStr(data.materno);
+      const correo = cleanStr(data.correo);
+      const telefono = cleanStr(data.telefono);
+      const direccion = cleanStr(data.direccion);
+      const fechaNac = normalizeDateForDb(data.fecha_nacimiento);
+
       let updated: any = null;
 
       if (process.env.DATABASE_URL) {
         try {
-          const result = await db.update(pacientes).set({
-            nombres: data.nombres,
-            paterno: data.paterno,
-            materno: data.materno,
-            correo: data.correo,
-            telefono: data.telefono,
-            direccion: data.direccion,
-            fecha_nacimiento: data.fecha_nacimiento || null,
-            updated_at: new Date()
-          }).where(eq(pacientes.id, id)).returning();
-          if (result.length > 0) updated = result[0];
+          // 1. Try updating by ID first (if realistic DB id)
+          if (!isNaN(id) && id < 1000000000) {
+            const result = await db.update(pacientes).set({
+              dv: dv || undefined,
+              nombres: nombres,
+              paterno: paterno,
+              materno: materno || null,
+              correo: correo || null,
+              telefono: telefono || null,
+              direccion: direccion || null,
+              fecha_nacimiento: fechaNac,
+              updatedAt: new Date()
+            }).where(eq(pacientes.id, id)).returning();
+            if (result.length > 0) updated = result[0];
+          }
+
+          // 2. If ID didn't match (e.g. client used timestamp ID), try matching by RUT
+          if (!updated && cuerpo) {
+            const result = await db.update(pacientes).set({
+              dv: dv || undefined,
+              nombres: nombres,
+              paterno: paterno,
+              materno: materno || null,
+              correo: correo || null,
+              telefono: telefono || null,
+              direccion: direccion || null,
+              fecha_nacimiento: fechaNac,
+              updatedAt: new Date()
+            }).where(
+              or(
+                eq(pacientes.rut, cuerpo),
+                eq(pacientes.rut, cleanCombined),
+                eq(pacientes.rut, String(data.rut || '').trim())
+              )
+            ).returning();
+            if (result.length > 0) updated = result[0];
+          }
+
+          // 3. Fallback direct SQL UPDATE to guarantee persistence
+          if (!updated && (cuerpo || (!isNaN(id) && id < 1000000000))) {
+            await db.execute(sql`
+              UPDATE pacientes 
+              SET nombres = ${nombres},
+                  paterno = ${paterno},
+                  materno = ${materno || null},
+                  correo = ${correo || null},
+                  telefono = ${telefono || null},
+                  direccion = ${direccion || null},
+                  fecha_nacimiento = ${fechaNac ? sql`${fechaNac}::date` : null},
+                  dv = ${dv || '0'},
+                  updated_at = NOW()
+              WHERE id = ${id} OR rut = ${cuerpo} OR rut = ${cleanCombined}
+            `);
+            const refetched = await db.select().from(pacientes).where(
+              or(eq(pacientes.id, id), eq(pacientes.rut, cuerpo), eq(pacientes.rut, cleanCombined))
+            );
+            if (refetched.length > 0) updated = refetched[0];
+          }
+
+          // 4. If still not in DB, insert the patient
+          if (!updated && cuerpo && nombres && paterno) {
+            const result = await db.insert(pacientes).values({
+              rut: cuerpo,
+              dv: dv || '0',
+              nombres: nombres,
+              paterno: paterno,
+              materno: materno || null,
+              fecha_nacimiento: fechaNac,
+              correo: correo || null,
+              telefono: telefono || null,
+              direccion: direccion || null,
+              activo: 'X'
+            }).returning();
+            if (result.length > 0) updated = result[0];
+          }
         } catch (dbErr) {
-          console.warn("[DB UPDATE ERROR pacientes]:", dbErr);
+          console.error("[DB UPDATE ERROR pacientes]:", dbErr);
         }
       }
 
-      memPacientes = memPacientes.map(p => p.id === id ? { ...p, ...data } : p);
-      res.json(updated || { id, ...data });
+      if (!updated) {
+        updated = {
+          id,
+          rut: cuerpo || data.rut,
+          dv: dv || data.dv,
+          nombres,
+          paterno,
+          materno,
+          correo,
+          telefono,
+          direccion,
+          fecha_nacimiento: fechaNac || data.fecha_nacimiento,
+          activo: data.activo || 'X'
+        };
+      }
+
+      memPacientes = memPacientes.map(p => (p.id === id || (p.rut === updated.rut && p.dv === updated.dv) || p.rut === cuerpo) ? updated : p);
+      res.json(updated);
     } catch (e) {
+      console.error(e);
       res.status(500).json({ error: String(e) });
     }
   });
@@ -830,12 +1136,48 @@ syncDatabase().catch(() => {});
 
       if (process.env.DATABASE_URL) {
         try {
-          // 1. Insert Visita
+          // Resolve real patient ID in PostgreSQL
+          let realPacienteId = Number(visita.paciente_id);
+          const patientInDb = await db.select().from(pacientes).where(eq(pacientes.id, realPacienteId));
+          
+          if (patientInDb.length === 0) {
+            // Find by RUT if available
+            const { cuerpo, dv, cleanCombined } = parseRutParts(visita.paciente?.rut, visita.paciente?.dv);
+            if (cuerpo) {
+              const byRut = await db.select().from(pacientes).where(
+                or(
+                  eq(pacientes.rut, cuerpo),
+                  eq(pacientes.rut, cleanCombined),
+                  eq(pacientes.rut, String(visita.paciente?.rut || '').trim())
+                )
+              );
+              if (byRut.length > 0) {
+                realPacienteId = byRut[0].id;
+              } else if (visita.paciente) {
+                // Insert patient first
+                const createdP = await db.insert(pacientes).values({
+                  rut: cuerpo,
+                  dv: dv || '0',
+                  nombres: cleanStr(visita.paciente.nombres),
+                  paterno: cleanStr(visita.paciente.paterno),
+                  materno: cleanStr(visita.paciente.materno) || null,
+                  fecha_nacimiento: normalizeDateForDb(visita.paciente.fecha_nacimiento),
+                  correo: cleanStr(visita.paciente.correo) || null,
+                  telefono: cleanStr(visita.paciente.telefono) || null,
+                  direccion: cleanStr(visita.paciente.direccion) || null,
+                  activo: 'X'
+                }).returning();
+                realPacienteId = createdP[0].id;
+              }
+            }
+          }
+
+          // 1. Insert Visita with verified realPacienteId
           const vResult = await db.insert(visitas).values({
-            medico_id: visita.medico_id,
-            paciente_id: visita.paciente_id,
-            diagnostico_id: visita.diagnostico_id || null,
-            tratamiento: visita.tratamiento,
+            medico_id: Number(visita.medico_id) || 1,
+            paciente_id: realPacienteId,
+            diagnostico_id: visita.diagnostico_id ? Number(visita.diagnostico_id) : null,
+            tratamiento: visita.tratamiento || null,
             codigo_verificacion: visita.codigo_verificacion,
             estado_id: 1,
             activo: 'X'
@@ -860,8 +1202,8 @@ syncDatabase().catch(() => {});
           if (visita.examenes && visita.examenes.length > 0) {
             await db.insert(orden_examenes).values(visita.examenes.map((e: any) => ({
               visita_id: vId,
-              examen_id: e.examen_id,
-              indicaciones: e.indicaciones,
+              examen_id: Number(e.examen_id) || 1,
+              indicaciones: e.indicaciones || null,
               estado: 1
             })));
           }
@@ -870,8 +1212,8 @@ syncDatabase().catch(() => {});
           if (visita.epicrisis && visita.epicrisis.length > 0) {
             await db.insert(epicrisis).values(visita.epicrisis.map((epi: any) => ({
               visita_id: vId,
-              paciente_id: visita.paciente_id,
-              medico_id: visita.medico_id,
+              paciente_id: realPacienteId,
+              medico_id: Number(visita.medico_id) || 1,
               contenido: epi.contenido
             })));
           }
@@ -886,7 +1228,7 @@ syncDatabase().catch(() => {});
             }
           });
         } catch (dbErr) {
-          console.warn("[DB INSERT VISITAS ERROR]:", dbErr);
+          console.error("[DB INSERT VISITAS ERROR]:", dbErr);
         }
       }
 

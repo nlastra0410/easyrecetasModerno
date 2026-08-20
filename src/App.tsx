@@ -97,18 +97,31 @@ export const App: React.FC = () => {
   };
 
   const populateFallbackData = () => {
-    setPacientes(initialPacientes);
+    // Check localStorage cache first
+    let cachedPacientes: Paciente[] | null = null;
+    let cachedVisitas: Visita[] | null = null;
+    try {
+      const savedP = localStorage.getItem('easyrecetas_pacientes');
+      if (savedP) cachedPacientes = JSON.parse(savedP);
+      const savedV = localStorage.getItem('easyrecetas_visitas');
+      if (savedV) cachedVisitas = JSON.parse(savedV);
+    } catch {
+      // Ignore
+    }
+
+    setPacientes(cachedPacientes && cachedPacientes.length ? cachedPacientes : initialPacientes);
     setMedicamentos(initialMedicamentos);
     setDiagnosticos(initialDiagnosticos);
     setExamenes(initialExamenes);
     setMedicos(initialMedicos);
     setFarmacias(initialFarmacias);
     setFarmaceutas(initialFarmaceutas);
-    setVisitas(initialVisitas);
+    setVisitas(cachedVisitas && cachedVisitas.length ? cachedVisitas : initialVisitas);
   };
 
   const populateData = (data: any) => {
-    setPacientes(Array.isArray(data.pacientes) && data.pacientes.length ? data.pacientes : initialPacientes);
+    const serverPacientes: Paciente[] = Array.isArray(data.pacientes) && data.pacientes.length ? data.pacientes : initialPacientes;
+    setPacientes(serverPacientes);
     setMedicamentos(Array.isArray(data.medicamentos) && data.medicamentos.length ? data.medicamentos : initialMedicamentos);
     setDiagnosticos(Array.isArray(data.diagnosticos) && data.diagnosticos.length ? data.diagnosticos : initialDiagnosticos);
     setExamenes(Array.isArray(data.examenes) && data.examenes.length ? data.examenes : initialExamenes);
@@ -126,7 +139,11 @@ export const App: React.FC = () => {
   const handleAddNewPaciente = (newPac: Paciente): Paciente => {
     // Optimistic
     const tempPac = { ...newPac, id: Date.now() };
-    setPacientes(prev => [tempPac, ...prev]);
+    setPacientes(prev => {
+      const next = [tempPac, ...prev];
+      try { localStorage.setItem('easyrecetas_pacientes', JSON.stringify(next)); } catch {}
+      return next;
+    });
 
     fetch('/api/pacientes', {
       method: 'POST',
@@ -135,19 +152,42 @@ export const App: React.FC = () => {
     })
       .then(r => r.json())
       .then(saved => {
-        setPacientes(prev => prev.map(p => p.id === tempPac.id ? saved : p));
-      });
+        if (saved && (saved.id || saved.rut)) {
+          setPacientes(prev => {
+            const next = prev.map(p => (p.id === tempPac.id || (p.rut === saved.rut && p.dv === saved.dv)) ? { ...p, ...saved } : p);
+            try { localStorage.setItem('easyrecetas_pacientes', JSON.stringify(next)); } catch {}
+            return next;
+          });
+        }
+      })
+      .catch(err => console.error('Error saving patient to DB:', err));
 
     return tempPac;
   };
 
   const handleUpdatePaciente = (updatedPac: Paciente) => {
-    setPacientes(prev => prev.map(p => p.id === updatedPac.id ? updatedPac : p));
+    setPacientes(prev => {
+      const next = prev.map(p => (p.id === updatedPac.id || (p.rut === updatedPac.rut && p.dv === updatedPac.dv)) ? updatedPac : p);
+      try { localStorage.setItem('easyrecetas_pacientes', JSON.stringify(next)); } catch {}
+      return next;
+    });
+
     fetch(`/api/pacientes/${updatedPac.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedPac)
-    }).catch(err => console.error('Error updating patient in DB:', err));
+    })
+      .then(r => r.json())
+      .then(saved => {
+        if (saved && (saved.id || saved.rut)) {
+          setPacientes(prev => {
+            const next = prev.map(p => (p.id === updatedPac.id || (p.rut === saved.rut && p.dv === saved.dv)) ? { ...p, ...saved } : p);
+            try { localStorage.setItem('easyrecetas_pacientes', JSON.stringify(next)); } catch {}
+            return next;
+          });
+        }
+      })
+      .catch(err => console.error('Error updating patient in DB:', err));
   };
 
   const handleAddNewMedicamento = (newMed: Medicamento) => {
@@ -208,6 +248,13 @@ export const App: React.FC = () => {
   };
 
   const handleSaveVisita = (newVisita: Visita) => {
+    // Optimistic Update
+    setVisitas(prev => {
+      const next = [newVisita, ...prev];
+      try { localStorage.setItem('easyrecetas_visitas', JSON.stringify(next)); } catch {}
+      return next;
+    });
+
     // Post to API
     fetch('/api/visitas', {
       method: 'POST',
@@ -216,9 +263,14 @@ export const App: React.FC = () => {
     })
       .then(res => res.json())
       .then(saved => {
-        setVisitas(prev => [saved, ...prev]);
+        setVisitas(prev => {
+          const next = prev.map(v => (v.id === newVisita.id || v.codigo_verificacion === saved.codigo_verificacion) ? saved : v);
+          try { localStorage.setItem('easyrecetas_visitas', JSON.stringify(next)); } catch {}
+          return next;
+        });
         setSelectedVisitaForModal(saved);
-      });
+      })
+      .catch(err => console.error('Error saving visita:', err));
   };
 
   const handleQuemarTodaReceta = (visitaId: number, farmaceutaNombre: string) => {
@@ -231,16 +283,20 @@ export const App: React.FC = () => {
 
     // 2. Optimistic Update in UI
     const now = new Date().toISOString();
-    setVisitas(prev => prev.map(vi => {
-      if (vi.id === visitaId) {
-        return {
-          ...vi,
-          estado_id: 3,
-          recetas: vi.recetas?.map(r => ({ ...r, estado: 3, farmaceuta_nombre: farmaceutaNombre, dispensado_fecha: now }))
-        };
-      }
-      return vi;
-    }));
+    setVisitas(prev => {
+      const next = prev.map(vi => {
+        if (vi.id === visitaId) {
+          return {
+            ...vi,
+            estado_id: 3,
+            recetas: vi.recetas?.map(r => ({ ...r, estado: 3, farmaceuta_nombre: farmaceutaNombre, dispensado_fecha: now }))
+          };
+        }
+        return vi;
+      });
+      try { localStorage.setItem('easyrecetas_visitas', JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   const handleQuemarItemMedicamento = (visitaId: number, itemId: number, farmaceutaNombre: string) => {
@@ -253,8 +309,8 @@ export const App: React.FC = () => {
 
     // 2. Optimistic Update
     const now = new Date().toISOString();
-    setVisitas((prev) =>
-      prev.map((v) => {
+    setVisitas((prev) => {
+      const next = prev.map((v) => {
         if (v.id === visitaId) {
           const updatedRecetas = v.recetas?.map((r) => {
             if (r.id === itemId) {
@@ -269,8 +325,10 @@ export const App: React.FC = () => {
           return { ...v, estado_id: allBurned ? 3 : someBurned ? 2 : 1, recetas: updatedRecetas };
         }
         return v;
-      })
-    );
+      });
+      try { localStorage.setItem('easyrecetas_visitas', JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   const handleQuickVerify = (code: string) => {

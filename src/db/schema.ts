@@ -124,6 +124,16 @@ export const epicrisis = pgTable('epicrisis', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const authTokensTable = pgTable('auth_tokens', {
+  id: serial('id').primaryKey(),
+  rut: varchar('rut', { length: 50 }).notNull(),
+  token: varchar('token', { length: 20 }).notNull(),
+  userData: text('user_data'),
+  role: varchar('role', { length: 50 }).notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // RELACIONES
 export const visitasRelations = relations(visitas, ({ one, many }) => ({
   medico: one(medicos, { fields: [visitas.medico_id], references: [medicos.id] }),

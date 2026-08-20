@@ -8,8 +8,9 @@ export function cleanRut(rut: string): string {
     : '';
 }
 
-export function formatRut(rutInput: string): string {
-  const cleaned = cleanRut(rutInput);
+export function formatRut(rutInput: string, dvInput?: string): string {
+  const combined = dvInput !== undefined ? `${rutInput}${dvInput}` : rutInput;
+  const cleaned = cleanRut(combined);
   if (cleaned.length < 2) return cleaned;
   
   const cuerpo = cleaned.slice(0, -1);
