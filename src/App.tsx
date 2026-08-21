@@ -253,7 +253,7 @@ export const App: React.FC = () => {
     fetch(`/api/recetas/${itemId}/dispensar`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ farmaceuta_id: activeFarmaceuta?.id || 1 })
+      body: JSON.stringify({ farmaceuta_id: activeFarmaceuta?.id || 1, visita_id: visitaId })
     }).catch(err => console.error('Error al dispensar fármaco en DB:', err));
 
     // 2. Optimistic Update

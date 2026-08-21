@@ -15,7 +15,7 @@ import {
   epicrisis,
   authTokensTable
 } from '../db/schema.js';
-import { eq, or, sql, desc } from 'drizzle-orm';
+import { eq, or, and, ne, sql, desc } from 'drizzle-orm';
 import twilio from 'twilio';
 import nodemailer from 'nodemailer';
 
@@ -233,6 +233,312 @@ async function sendPrescriptionEmail(toEmail: string, visita: any): Promise<bool
   return false;
 }
 
+const DEFAULT_PACIENTES = [
+  {
+    id: 1,
+    nombres: 'CAMILA ANDREA',
+    paterno: 'ROJAS',
+    materno: 'GONZALEZ',
+    rut: '18492019',
+    dv: '4',
+    fecha_nacimiento: '1993-05-14',
+    correo: 'camila.rojas@gmail.com',
+    telefono: '+56 9 9871 2341',
+    direccion: 'Av. Providencia 1420, Providencia',
+    activo: 'X'
+  },
+  {
+    id: 2,
+    nombres: 'GONZALO IGNACIO',
+    paterno: 'HERNANDEZ',
+    materno: 'CASTRO',
+    rut: '15892104',
+    dv: '8',
+    fecha_nacimiento: '1984-11-22',
+    correo: 'ghernandez@empresa.cl',
+    telefono: '+56 9 8765 4321',
+    direccion: 'Calle Los Alerces 850, Ñuñoa',
+    activo: 'X'
+  },
+  {
+    id: 3,
+    nombres: 'MATIAS SEBASTIAN',
+    paterno: 'VALENZUELA',
+    materno: 'RIOS',
+    rut: '20194820',
+    dv: '1',
+    fecha_nacimiento: '1999-08-03',
+    correo: 'matias.valenzuela@outlook.cl',
+    telefono: '+56 9 6543 9081',
+    direccion: 'Pasaje Las Violetas 412, Santiago',
+    activo: 'X'
+  },
+  {
+    id: 4,
+    nombres: 'PATRICIA ELENA',
+    paterno: 'SOTO',
+    materno: 'NAVARRO',
+    rut: '11482910',
+    dv: 'K',
+    fecha_nacimiento: '1968-03-29',
+    correo: 'patricia.soto@hotmail.com',
+    telefono: '+56 9 5412 8901',
+    direccion: 'Av. Las Condes 10200, Las Condes',
+    activo: 'X'
+  },
+  {
+    id: 5,
+    nombres: 'SOFIA BEATRIZ',
+    paterno: 'AGUILERA',
+    materno: 'CONTRERAS',
+    rut: '22849102',
+    dv: '7',
+    fecha_nacimiento: '2005-12-11',
+    correo: 'sofia.aguilera@alumnos.cl',
+    telefono: '+56 9 4321 0987',
+    direccion: 'Manuel Montt 580, Providencia',
+    activo: 'X'
+  },
+  {
+    id: 6,
+    nombres: 'MAXIMILIANO',
+    paterno: 'LASTRA',
+    materno: 'ITURRIAGA',
+    rut: '28152245',
+    dv: '0',
+    fecha_nacimiento: '2024-05-23',
+    correo: 'nlastra@outlook.cl',
+    telefono: '+56997586179',
+    direccion: 'Calle la higuera 149, Maipú',
+    activo: 'X'
+  }
+];
+
+const DEFAULT_DIAGNOSTICOS = [
+  { codigo: 'J00', descripcion: 'Rinofaringitis aguda (Resfriado común)', activo: 'X' },
+  { codigo: 'J06.9', descripcion: 'Infección aguda de las vías respiratorias superiores, no especificada', activo: 'X' },
+  { codigo: 'J20.9', descripcion: 'Bronquitis aguda, no especificada', activo: 'X' },
+  { codigo: 'J45.9', descripcion: 'Asma bronquial, no especificada', activo: 'X' },
+  { codigo: 'I10', descripcion: 'Hipertensión esencial (primaria)', activo: 'X' },
+  { codigo: 'E11.9', descripcion: 'Diabetes mellitus tipo 2 (No insulinodependiente)', activo: 'X' },
+  { codigo: 'E78.5', descripcion: 'Hiperlipidemia / Dislipidemia no especificada', activo: 'X' },
+  { codigo: 'K29.7', descripcion: 'Gastritis y duodenitis, no especificada', activo: 'X' },
+  { codigo: 'K21.9', descripcion: 'Enfermedad por reflujo gastroesofágico (ERGE)', activo: 'X' },
+  { codigo: 'K02.1', descripcion: 'Caries de la dentina / Caries dental activa', activo: 'X' },
+  { codigo: 'K05.1', descripcion: 'Gingivitis crónica y enfermedades periodontales', activo: 'X' },
+  { codigo: 'K04.0', descripcion: 'Pulpitis aguda reversible / irreversible', activo: 'X' },
+  { codigo: 'M54.5', descripcion: 'Lumbago no especificado / Dorsalgia', activo: 'X' },
+  { codigo: 'M25.5', descripcion: 'Dolor articular (Artralgia / Mialgia)', activo: 'X' },
+  { codigo: 'F32.9', descripcion: 'Episodio depresivo moderado / leve', activo: 'X' },
+  { codigo: 'F41.9', descripcion: 'Trastorno de ansiedad generalizada, no especificado', activo: 'X' },
+  { codigo: 'R51', descripcion: 'Cefalea / Cefalea tensional', activo: 'X' },
+  { codigo: 'N39.0', descripcion: 'Infección de vías urinarias (ITU), no especificada', activo: 'X' },
+  { codigo: 'L20.9', descripcion: 'Dermatitis atópica / Eczema', activo: 'X' },
+  { codigo: 'Z00.0', descripcion: 'Examen médico general y control de salud preventivo', activo: 'X' },
+  { codigo: 'Z01.2', descripcion: 'Examen odontológico preventivo y profilaxis', activo: 'X' }
+];
+
+const DEFAULT_MEDICAMENTOS = [
+  {
+    codigo: 'MED-1001',
+    descripcion: 'Paracetamol 500 mg',
+    laboratorio: 'Laboratorio Chile',
+    departamento: 'Analgésicos y Antipiréticos',
+    restriccion: 'Venta Directa',
+    forma_farmaceutica: 'Comprimido',
+    presentacion: 'Caja x 16 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1002',
+    descripcion: 'Ibuprofeno 400 mg',
+    laboratorio: 'Laboratorio Mintlab',
+    departamento: 'Antiinflamatorios No Esteroidales (AINEs)',
+    restriccion: 'Venta Directa',
+    forma_farmaceutica: 'Comprimido Recubierto',
+    presentacion: 'Caja x 20 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1003',
+    descripcion: 'Ibuprofeno 600 mg',
+    laboratorio: 'Laboratorio Saval',
+    departamento: 'Antiinflamatorios No Esteroidales (AINEs)',
+    restriccion: 'Receta Médica Simple',
+    forma_farmaceutica: 'Comprimido Recubierto',
+    presentacion: 'Caja x 20 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1004',
+    descripcion: 'Amoxicilina 500 mg',
+    laboratorio: 'Laboratorio Chile',
+    departamento: 'Antibióticos / Betalactámicos',
+    restriccion: 'Receta Médica Retenida',
+    forma_farmaceutica: 'Cápsula',
+    presentacion: 'Caja x 21 cápsulas',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1005',
+    descripcion: 'Amoxicilina + Ácido Clavulánico 875/125 mg',
+    laboratorio: 'Laboratorio Eurofarma',
+    departamento: 'Antibióticos Amplio Espectro',
+    restriccion: 'Receta Médica Retenida',
+    forma_farmaceutica: 'Comprimido Recubierto',
+    presentacion: 'Caja x 14 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1006',
+    descripcion: 'Losartán Potásico 50 mg',
+    laboratorio: 'Laboratorio Bagó',
+    departamento: 'Cardiovascular / Antihipertensivos',
+    restriccion: 'Receta Médica Simple',
+    forma_farmaceutica: 'Comprimido Recubierto',
+    presentacion: 'Caja x 30 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1007',
+    descripcion: 'Enalapril Maleato 10 mg',
+    laboratorio: 'Laboratorio Chile',
+    departamento: 'Cardiovascular / Antihipertensivos',
+    restriccion: 'Receta Médica Simple',
+    forma_farmaceutica: 'Comprimido',
+    presentacion: 'Caja x 30 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1008',
+    descripcion: 'Metformina Clorhidrato 850 mg',
+    laboratorio: 'Laboratorio Merck',
+    departamento: 'Endocrinología / Hipoglicemiantes',
+    restriccion: 'Receta Médica Simple',
+    forma_farmaceutica: 'Comprimido',
+    presentacion: 'Caja x 60 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1009',
+    descripcion: 'Atorvastatina 20 mg',
+    laboratorio: 'Laboratorio Pfizer',
+    departamento: 'Cardiovascular / Hipolipemiantes',
+    restriccion: 'Receta Médica Simple',
+    forma_farmaceutica: 'Comprimido Recubierto',
+    presentacion: 'Caja x 30 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1010',
+    descripcion: 'Omeprazol 20 mg',
+    laboratorio: 'Laboratorio Mintlab',
+    departamento: 'Gastroenterología / Antiácidos',
+    restriccion: 'Receta Médica Simple',
+    forma_farmaceutica: 'Cápsula con microgránulos',
+    presentacion: 'Caja x 30 cápsulas',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1011',
+    descripcion: 'Salbutamol 100 mcg / dosis',
+    laboratorio: 'Laboratorio GlaxoSmithKline',
+    departamento: 'Respiratorio / Broncodilatadores',
+    restriccion: 'Receta Médica Simple',
+    forma_farmaceutica: 'Aerosol Inhalador',
+    presentacion: 'Frasco Inhalador x 200 dosis',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1012',
+    descripcion: 'Ketorolaco Trometamol 10 mg',
+    laboratorio: 'Laboratorio Chile',
+    departamento: 'Analgésicos Mayores',
+    restriccion: 'Receta Médica Simple',
+    forma_farmaceutica: 'Comprimido Sublingual',
+    presentacion: 'Caja x 10 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1013',
+    descripcion: 'Clorfenamina Maleato 4 mg',
+    laboratorio: 'Laboratorio Chile',
+    departamento: 'Antihistamínicos',
+    restriccion: 'Venta Directa',
+    forma_farmaceutica: 'Comprimido',
+    presentacion: 'Caja x 20 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1014',
+    descripcion: 'Desloratadina 5 mg',
+    laboratorio: 'Laboratorio Saval',
+    departamento: 'Antihistamínicos',
+    restriccion: 'Venta Directa',
+    forma_farmaceutica: 'Comprimido Recubierto',
+    presentacion: 'Caja x 30 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1015',
+    descripcion: 'Azitromicina 500 mg',
+    laboratorio: 'Laboratorio Mintlab',
+    departamento: 'Antibióticos / Macrólidos',
+    restriccion: 'Receta Médica Retenida',
+    forma_farmaceutica: 'Comprimido Recubierto',
+    presentacion: 'Caja x 3 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1016',
+    descripcion: 'Clonazepam 0.5 mg',
+    laboratorio: 'Laboratorio Roche',
+    departamento: 'Psiquiatría / Ansiolíticos',
+    restriccion: 'Receta Cheque',
+    forma_farmaceutica: 'Comprimido ranurado',
+    presentacion: 'Caja x 30 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1017',
+    descripcion: 'Sertralina 50 mg',
+    laboratorio: 'Laboratorio Pfizer',
+    departamento: 'Psiquiatría / Antidepresivos',
+    restriccion: 'Receta Médica Retenida',
+    forma_farmaceutica: 'Comprimido',
+    presentacion: 'Caja x 30 comprimidos',
+    activo: 'X'
+  },
+  {
+    codigo: 'MED-1018',
+    descripcion: 'Clorhexidina 0.12% Solución Bucal',
+    laboratorio: 'Laboratorio Oralene',
+    departamento: 'Odontología / Antisépticos',
+    restriccion: 'Venta Directa',
+    forma_farmaceutica: 'Solución bucal',
+    presentacion: 'Frasco x 250 ml con dosificador',
+    activo: 'X'
+  }
+];
+
+const DEFAULT_EXAMENES = [
+  { codigo: 'EX-01', nombre: 'Hemograma Completo y VHS', descripcion: 'Recuento globular, fórmula leucocitaria, plaquetas y velocidad de sedimentación globular', activo: 'X' },
+  { codigo: 'EX-02', nombre: 'Perfil Bioquímico (12 parámetros)', descripcion: 'Glicemia, nitrógeno ureico, creatinina, ácido úrico, bilirrubina, fosfatasas alcalinas, transaminasas, etc.', activo: 'X' },
+  { codigo: 'EX-03', nombre: 'Perfil Lipídico Completo', descripcion: 'Colesterol total, HDL, LDL, VLDL y triglicéridos en plasma', activo: 'X' },
+  { codigo: 'EX-04', nombre: 'Glicemia en Ayunas', descripcion: 'Medición de glucosa plasmática basal en sangre venosa', activo: 'X' },
+  { codigo: 'EX-05', nombre: 'Hemoglobina Glicosilada (HbA1c)', descripcion: 'Monitoreo de control glicémico promedio de los últimos 3 meses', activo: 'X' },
+  { codigo: 'EX-06', nombre: 'Orina Completa y Urocultivo con Antibiograma', descripcion: 'Sedimento urinario, físico-químico y cultivo bacteriano con susceptibilidad a antibióticos', activo: 'X' },
+  { codigo: 'EX-07', nombre: 'Perfil Renal (Creatinina + Nitrógeno Ureico)', descripcion: 'Evaluación de filtración glomerular y función renal', activo: 'X' },
+  { codigo: 'EX-08', nombre: 'Perfil Hepático (Transaminasas GOT/GPT, GGT, Bilirrubina)', descripcion: 'Evaluación funcional y enzimática hepática', activo: 'X' },
+  { codigo: 'EX-09', nombre: 'Perfil Tiroideo (TSH y T4 Libre)', descripcion: 'Screening de función tiroidea hipo/hipertiroidismo', activo: 'X' },
+  { codigo: 'EX-10', nombre: 'Electrocardiograma de Reposo (ECG 12 derivaciones)', descripcion: 'Trazado eléctrico cardíaco estándar con informe médico', activo: 'X' },
+  { codigo: 'EX-11', nombre: 'Radiografía de Tórax AP y Lateral', descripcion: 'Estudio radiológico simple de campos pulmonares y silueta cardíaca', activo: 'X' },
+  { codigo: 'EX-12', nombre: 'Ecografía Abdominal Completa', descripcion: 'Ultrasonografía de hígado, vesícula biliar, páncreas, riñones y bazo', activo: 'X' },
+  { codigo: 'EX-13', nombre: 'Radiografía Panorámica Dental (Ortopantomografía)', descripcion: 'Evaluación integral de maxilar, mandíbula, piezas dentarias y ATM', activo: 'X' },
+  { codigo: 'EX-14', nombre: 'Radiografía Bite-Wing (Aleta de Mordida) Bilateral', descripcion: 'Detección de caries interproximales y crestas óseas alveolares', activo: 'X' },
+  { codigo: 'EX-15', nombre: 'Tomografía Axial Computarizada (TAC) de Cerebro', descripcion: 'Estudio tomográfico de encéfalo sin medio de contraste', activo: 'X' }
+];
+
 const DEFAULT_MEDICOS = [
   {
     id: 1,
@@ -292,30 +598,6 @@ const DEFAULT_MEDICOS = [
     correo: 'qflembach@gmail.com',
     registro_minsal: 'RNM-639102',
     especialidad: 'Medicina General',
-    activo: 'X'
-  },
-  {
-    id: 6,
-    nombres: 'Dr. Roberto',
-    apellidos: 'González Pinto',
-    rut: '14567890',
-    dv: '1',
-    telefono: '+56976543210',
-    correo: 'rgonzalez.dental@gmail.com',
-    registro_minsal: 'RNM-329871',
-    especialidad: 'Cirujano Dentista / Odontología',
-    activo: 'X'
-  },
-  {
-    id: 7,
-    nombres: 'Nelson',
-    apellidos: 'Lastra',
-    rut: '12345678',
-    dv: '5',
-    telefono: '+56934456811',
-    correo: 'nelsonlastra4@gmail.com',
-    registro_minsal: 'RNM-849201',
-    especialidad: 'Médico Cirujano (Medicina General)',
     activo: 'X'
   }
 ];
@@ -643,8 +925,78 @@ async function ensureDbSynced() {
     await db.execute(sql`ALTER TABLE visitas ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT NOW();`);
     await db.execute(sql`ALTER TABLE recetas ADD COLUMN IF NOT EXISTS activo char(1) DEFAULT 'X';`);
 
+    // Seed default patients if pacientes table is empty
+    try {
+      // Clean up old stray/test records if any
+      await db.execute(sql`DELETE FROM pacientes WHERE rut IN ('16778715', '15678912', '18731753', '19840192') AND rut NOT IN ('18492019', '15892104', '20194820', '11482910', '22849102', '28152245');`);
+
+      const pacCountRes: any = await db.execute(sql`SELECT count(*)::int as count FROM pacientes;`);
+      const count = Number(pacCountRes?.rows?.[0]?.count || pacCountRes?.[0]?.count || 0);
+      if (count === 0) {
+        for (const p of DEFAULT_PACIENTES) {
+          await db.execute(sql`
+            INSERT INTO pacientes (nombres, paterno, materno, rut, dv, fecha_nacimiento, correo, telefono, direccion, activo)
+            VALUES (${p.nombres}, ${p.paterno}, ${p.materno}, ${p.rut}, ${p.dv}, ${p.fecha_nacimiento}::date, ${p.correo}, ${p.telefono}, ${p.direccion}, 'X');
+          `);
+        }
+      }
+    } catch (seedPacErr) {
+      console.warn('[SEED PACIENTES WARN]', seedPacErr);
+    }
+
+    // Seed default diagnoses if diagnostico table is empty
+    try {
+      const diagCountRes: any = await db.execute(sql`SELECT count(*)::int as count FROM diagnostico;`);
+      const count = Number(diagCountRes?.rows?.[0]?.count || diagCountRes?.[0]?.count || 0);
+      if (count === 0) {
+        for (const d of DEFAULT_DIAGNOSTICOS) {
+          await db.execute(sql`
+            INSERT INTO diagnostico (codigo, descripcion, activo)
+            VALUES (${d.codigo}, ${d.descripcion}, 'X');
+          `);
+        }
+      }
+    } catch (seedDiagErr) {
+      console.warn('[SEED DIAGNOSTICOS WARN]', seedDiagErr);
+    }
+
+    // Seed default medications if medicamentos table is empty
+    try {
+      const medCountRes: any = await db.execute(sql`SELECT count(*)::int as count FROM medicamentos;`);
+      const count = Number(medCountRes?.rows?.[0]?.count || medCountRes?.[0]?.count || 0);
+      if (count === 0) {
+        for (const m of DEFAULT_MEDICAMENTOS) {
+          await db.execute(sql`
+            INSERT INTO medicamentos (codigo, descripcion, laboratorio, departamento, restriccion, forma_farmaceutica, presentacion, activo)
+            VALUES (${m.codigo}, ${m.descripcion}, ${m.laboratorio}, ${m.departamento}, ${m.restriccion}, ${m.forma_farmaceutica}, ${m.presentacion}, 'X');
+          `);
+        }
+      }
+    } catch (seedMedsErr) {
+      console.warn('[SEED MEDICAMENTOS WARN]', seedMedsErr);
+    }
+
+    // Seed default exams if examenes table is empty
+    try {
+      const exCountRes: any = await db.execute(sql`SELECT count(*)::int as count FROM examenes;`);
+      const count = Number(exCountRes?.rows?.[0]?.count || exCountRes?.[0]?.count || 0);
+      if (count === 0) {
+        for (const ex of DEFAULT_EXAMENES) {
+          await db.execute(sql`
+            INSERT INTO examenes (codigo, nombre, descripcion, activo)
+            VALUES (${ex.codigo}, ${ex.nombre}, ${ex.descripcion}, 'X');
+          `);
+        }
+      }
+    } catch (seedExErr) {
+      console.warn('[SEED EXAMENES WARN]', seedExErr);
+    }
+
     // Seed default doctors if medicos table is empty
     try {
+      // Clean up any test/stray records
+      await db.execute(sql`DELETE FROM medicos WHERE rut IN ('12345678', '14567890');`);
+
       const medCountRes: any = await db.execute(sql`SELECT count(*)::int as count FROM medicos;`);
       const count = Number(medCountRes?.rows?.[0]?.count || medCountRes?.[0]?.count || 0);
       if (count === 0) {
@@ -742,8 +1094,7 @@ export function createExpressApp() {
         console.warn("[DB QUERY MEDICOS WARNING]:", (dbErr as any)?.message || dbErr);
       }
 
-      // Combine with default medicos list to ensure 100% availability
-      const allMedicos = [...dbMedicosList, ...DEFAULT_MEDICOS];
+      const allMedicos = dbMedicosList.length > 0 ? dbMedicosList : DEFAULT_MEDICOS;
       medico = allMedicos.find(m => isRutMatching(m.rut, m.dv, inputRutStr));
 
       // 2. Fetch live pharmacists from Postgres DB
@@ -755,8 +1106,7 @@ export function createExpressApp() {
         console.warn("[DB QUERY FARMACEUTAS WARNING]:", (dbErr as any)?.message || dbErr);
       }
 
-      // Combine with default farmaceutas list
-      const allFarmaceutas = [...dbFarmaceutasList, ...DEFAULT_FARMACEUTAS];
+      const allFarmaceutas = dbFarmaceutasList.length > 0 ? dbFarmaceutasList : DEFAULT_FARMACEUTAS;
       farmaceuta = allFarmaceutas.find(ph => isRutMatching(ph.rut, ph.dv, inputRutStr));
 
       if (!medico && !farmaceuta) {
@@ -986,11 +1336,11 @@ export function createExpressApp() {
       }
 
       res.json({
-        pacientes: p,
+        pacientes: p.length > 0 ? p : DEFAULT_PACIENTES,
         medicos: m.length > 0 ? m : DEFAULT_MEDICOS,
-        diagnosticos: d,
-        medicamentos: meds,
-        examenes: ex,
+        diagnosticos: d.length > 0 ? d : DEFAULT_DIAGNOSTICOS,
+        medicamentos: meds.length > 0 ? meds : DEFAULT_MEDICAMENTOS,
+        examenes: ex.length > 0 ? ex : DEFAULT_EXAMENES,
         farmacias: f.length > 0 ? f : DEFAULT_FARMACIAS,
         farmaceutas: ph.length > 0 ? ph : DEFAULT_FARMACEUTAS,
         visitas: v
@@ -998,11 +1348,11 @@ export function createExpressApp() {
     } catch (e) {
       console.error("[INIT ERROR]:", e);
       res.json({
-        pacientes: [],
+        pacientes: DEFAULT_PACIENTES,
         medicos: DEFAULT_MEDICOS,
-        diagnosticos: [],
-        medicamentos: [],
-        examenes: [],
+        diagnosticos: DEFAULT_DIAGNOSTICOS,
+        medicamentos: DEFAULT_MEDICAMENTOS,
+        examenes: DEFAULT_EXAMENES,
         farmacias: DEFAULT_FARMACIAS,
         farmaceutas: DEFAULT_FARMACEUTAS,
         visitas: []
@@ -1010,7 +1360,121 @@ export function createExpressApp() {
     }
   });
 
+  // REST ENDPOINTS FOR INDIVIDUAL TABLES
+
   // PACIENTES
+  apiRouter.get('/pacientes', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const list = await db.select().from(pacientes);
+      res.json(list.length > 0 ? list : DEFAULT_PACIENTES);
+    } catch (e) {
+      res.json(DEFAULT_PACIENTES);
+    }
+  });
+
+  // MEDICOS
+  apiRouter.get('/medicos', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const list = await db.select().from(medicos);
+      res.json(list.length > 0 ? list : DEFAULT_MEDICOS);
+    } catch (e) {
+      res.json(DEFAULT_MEDICOS);
+    }
+  });
+
+  // DIAGNOSTICOS (CIE-10)
+  apiRouter.get(['/diagnosticos', '/diagnostico'], async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const list = await db.select().from(diagnostico);
+      res.json(list.length > 0 ? list : DEFAULT_DIAGNOSTICOS);
+    } catch (e) {
+      res.json(DEFAULT_DIAGNOSTICOS);
+    }
+  });
+
+  apiRouter.post(['/diagnosticos', '/diagnostico'], async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const data = req.body;
+      const result = await db.insert(diagnostico).values({
+        codigo: data.codigo,
+        descripcion: data.descripcion,
+        activo: 'X'
+      }).returning();
+      res.json(result[0]);
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // MEDICAMENTOS
+  apiRouter.get('/medicamentos', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const list = await db.select().from(medicamentos);
+      res.json(list.length > 0 ? list : DEFAULT_MEDICAMENTOS);
+    } catch (e) {
+      res.json(DEFAULT_MEDICAMENTOS);
+    }
+  });
+
+  // EXAMENES
+  apiRouter.get('/examenes', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const list = await db.select().from(examenes);
+      res.json(list.length > 0 ? list : DEFAULT_EXAMENES);
+    } catch (e) {
+      res.json(DEFAULT_EXAMENES);
+    }
+  });
+
+  // FARMACIAS & FARMACEUTAS
+  apiRouter.get('/farmacias', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const list = await db.select().from(farmacias);
+      res.json(list.length > 0 ? list : DEFAULT_FARMACIAS);
+    } catch (e) {
+      res.json(DEFAULT_FARMACIAS);
+    }
+  });
+
+  apiRouter.get('/farmaceutas', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const list = await db.select().from(farmaceutas);
+      res.json(list.length > 0 ? list : DEFAULT_FARMACEUTAS);
+    } catch (e) {
+      res.json(DEFAULT_FARMACEUTAS);
+    }
+  });
+
+  // VISITAS
+  apiRouter.get('/visitas', async (req, res) => {
+    try {
+      await ensureDbSynced();
+      const v = await db.query.visitas.findMany({
+        with: {
+          paciente: true,
+          medico: true,
+          diagnostico: true,
+          recetas: { with: { medicamento: true, farmaceuta: true } },
+          examenes: { with: { examen: true } },
+          epicrisis: true
+        },
+        orderBy: (visitasTable: any, { desc }: { desc: any }) => [desc(visitasTable.fecha)]
+      });
+      res.json(v);
+    } catch (e) {
+      res.json([]);
+    }
+  });
+
+  // PACIENTES CRUD
   apiRouter.post('/pacientes', async (req, res) => {
     try {
       await ensureDbSynced();
@@ -1149,45 +1613,126 @@ export function createExpressApp() {
     try {
       await ensureDbSynced();
       const { visita } = req.body;
+      if (!visita) {
+        return res.status(400).json({ error: 'Payload de visita no proporcionado' });
+      }
+
+      // 1. Resolve or find valid paciente_id
+      let validPacienteId = Number(visita.paciente_id);
+      let pacFound = validPacienteId ? await db.select().from(pacientes).where(eq(pacientes.id, validPacienteId)).limit(1) : [];
+      
+      if (pacFound.length === 0 && visita.paciente) {
+        const pacRutClean = (visita.paciente.rut || '').trim();
+        const pacDvClean = (visita.paciente.dv || '').trim().toUpperCase();
+        if (pacRutClean) {
+          const byRut = await db.select().from(pacientes).where(eq(pacientes.rut, pacRutClean)).limit(1);
+          if (byRut.length > 0) {
+            validPacienteId = byRut[0].id;
+          } else {
+            const newPacRes = await db.insert(pacientes).values({
+              rut: pacRutClean,
+              dv: pacDvClean || '0',
+              nombres: (visita.paciente.nombres || 'PACIENTE').toUpperCase(),
+              paterno: (visita.paciente.paterno || '').toUpperCase(),
+              materno: (visita.paciente.materno || '').toUpperCase(),
+              fecha_nacimiento: visita.paciente.fecha_nacimiento || null,
+              correo: visita.paciente.correo || null,
+              telefono: visita.paciente.telefono || null,
+              direccion: visita.paciente.direccion || null,
+              activo: 'X'
+            }).returning();
+            validPacienteId = newPacRes[0].id;
+          }
+        }
+      }
+
+      if (!validPacienteId) {
+        const firstPac = await db.select().from(pacientes).limit(1);
+        if (firstPac.length > 0) validPacienteId = firstPac[0].id;
+      }
+
+      // 2. Resolve or find valid medico_id
+      let validMedicoId = Number(visita.medico_id);
+      let medFound = validMedicoId ? await db.select().from(medicos).where(eq(medicos.id, validMedicoId)).limit(1) : [];
+      if (medFound.length === 0) {
+        if (visita.medico?.rut) {
+          const byRut = await db.select().from(medicos).where(eq(medicos.rut, (visita.medico.rut || '').trim())).limit(1);
+          if (byRut.length > 0) validMedicoId = byRut[0].id;
+        }
+        if (!validMedicoId || medFound.length === 0) {
+          const firstMed = await db.select().from(medicos).limit(1);
+          if (firstMed.length > 0) validMedicoId = firstMed[0].id;
+        }
+      }
+
+      // 3. Resolve diagnostico_id
+      let validDiagId: number | null = visita.diagnostico_id ? Number(visita.diagnostico_id) : null;
+      if (validDiagId) {
+        const diagFound = await db.select().from(diagnostico).where(eq(diagnostico.id, validDiagId)).limit(1);
+        if (diagFound.length === 0) validDiagId = null;
+      }
+
+      // 4. Insert Visita
       const vResult = await db.insert(visitas).values({
-        medico_id: visita.medico_id,
-        paciente_id: visita.paciente_id,
-        diagnostico_id: visita.diagnostico_id || null,
-        tratamiento: visita.tratamiento,
-        codigo_verificacion: visita.codigo_verificacion,
+        medico_id: validMedicoId,
+        paciente_id: validPacienteId,
+        diagnostico_id: validDiagId,
+        tratamiento: visita.tratamiento || 'Tratamiento según indicaciones',
+        codigo_verificacion: visita.codigo_verificacion || `ER-${Math.floor(100000 + Math.random() * 900000)}`,
         estado_id: 1,
         activo: 'X'
       }).returning();
       
       const vId = vResult[0].id;
 
+      // 5. Insert Recetas
       if (visita.recetas && visita.recetas.length > 0) {
-        await db.insert(recetas).values(visita.recetas.map((r: any) => ({
-          visita_id: vId,
-          medicamento_id: r.medicamento_id,
-          tratamiento: r.tratamiento,
-          cantidad: r.cantidad,
-          duracion: r.duracion,
-          estado: 1,
-          activo: 'X'
-        })));
+        for (const r of visita.recetas) {
+          let validMedId = Number(r.medicamento_id);
+          const medCheck = validMedId ? await db.select().from(medicamentos).where(eq(medicamentos.id, validMedId)).limit(1) : [];
+          if (medCheck.length === 0) {
+            const firstMed = await db.select().from(medicamentos).limit(1);
+            validMedId = firstMed.length > 0 ? firstMed[0].id : 1;
+          }
+
+          await db.insert(recetas).values({
+            visita_id: vId,
+            medicamento_id: validMedId,
+            tratamiento: r.tratamiento || 'Según indicación médica',
+            cantidad: Number(r.cantidad) || 1,
+            duracion: r.duracion || 'Según indicación',
+            estado: 1,
+            activo: 'X'
+          });
+        }
       }
 
+      // 6. Insert Examenes
       if (visita.examenes && visita.examenes.length > 0) {
-        await db.insert(orden_examenes).values(visita.examenes.map((e: any) => ({
-          visita_id: vId,
-          examen_id: e.examen_id,
-          indicaciones: e.indicaciones,
-          estado: 1
-        })));
+        for (const e of visita.examenes) {
+          let validExId = Number(e.examen_id);
+          const exCheck = validExId ? await db.select().from(examenes).where(eq(examenes.id, validExId)).limit(1) : [];
+          if (exCheck.length === 0) {
+            const firstEx = await db.select().from(examenes).limit(1);
+            validExId = firstEx.length > 0 ? firstEx[0].id : 1;
+          }
+
+          await db.insert(orden_examenes).values({
+            visita_id: vId,
+            examen_id: validExId,
+            indicaciones: e.indicaciones || 'Evaluación diagnóstica',
+            estado: 1
+          });
+        }
       }
 
+      // 7. Insert Epicrisis
       if (visita.epicrisis && visita.epicrisis.length > 0) {
         await db.insert(epicrisis).values(visita.epicrisis.map((epi: any) => ({
           visita_id: vId,
-          paciente_id: visita.paciente_id,
-          medico_id: visita.medico_id,
-          contenido: epi.contenido
+          paciente_id: validPacienteId,
+          medico_id: validMedicoId,
+          contenido: epi.contenido || ''
         })));
       }
 
@@ -1203,43 +1748,59 @@ export function createExpressApp() {
 
       res.json(completeVisita);
     } catch (e) {
-      console.error(e);
+      console.error('[POST /api/visitas ERROR]:', e);
       res.status(500).json({ error: String(e) });
     }
   });
 
-  // DISPENSAR (QUEMAR) RECETA INDIVIDUAL
+  // DISPENSAR (QUEMAR) RECETA INDIVIDUAL / PARCIAL
   apiRouter.put('/recetas/:id/dispensar', async (req, res) => {
     try {
       await ensureDbSynced();
       const { id } = req.params;
-      const { farmaceuta_id } = req.body;
-      
-      const rResult = await db.update(recetas)
+      const { farmaceuta_id, visita_id } = req.body;
+      const recetaId = Number(id);
+
+      let rResult = await db.update(recetas)
         .set({ 
           estado: 3, 
-          farmaceuta_id: farmaceuta_id || 1,
+          farmaceuta_id: farmaceuta_id ? Number(farmaceuta_id) : 1,
           dispensado_fecha: new Date()
         })
-        .where(eq(recetas.id, Number(id)))
+        .where(eq(recetas.id, recetaId))
         .returning();
+
+      if (rResult.length === 0 && visita_id) {
+        // Fallback: update first undispensed recipe of the visit
+        const firstUndispensed = await db.select().from(recetas)
+          .where(and(eq(recetas.visita_id, Number(visita_id)), ne(recetas.estado, 3)))
+          .limit(1);
+        if (firstUndispensed.length > 0) {
+          rResult = await db.update(recetas)
+            .set({ 
+              estado: 3, 
+              farmaceuta_id: farmaceuta_id ? Number(farmaceuta_id) : 1,
+              dispensado_fecha: new Date()
+            })
+            .where(eq(recetas.id, firstUndispensed[0].id))
+            .returning();
+        }
+      }
 
       if (rResult.length > 0) {
         const vId = rResult[0].visita_id;
-        const remaining = await db.select().from(recetas).where(
-           eq(recetas.visita_id, vId)
-        );
-        const allDispensadas = remaining.length === 0 || remaining.every((r: any) => r.estado === 3);
-        const anyDispensadas = remaining.some((r: any) => r.estado === 3);
+        const allItems = await db.select().from(recetas).where(eq(recetas.visita_id, vId));
+        const allDispensadas = allItems.length > 0 && allItems.every((r: any) => r.estado === 3);
+        const anyDispensadas = allItems.some((r: any) => r.estado === 3);
         
         await db.update(visitas)
           .set({ estado_id: allDispensadas ? 3 : (anyDispensadas ? 2 : 1) })
           .where(eq(visitas.id, vId));
       }
 
-      res.json(rResult[0]);
+      res.json(rResult[0] || { success: true });
     } catch (e) {
-      console.error(e);
+      console.error('[PUT /api/recetas/:id/dispensar ERROR]:', e);
       res.status(500).json({ error: String(e) });
     }
   });
@@ -1250,35 +1811,52 @@ export function createExpressApp() {
       await ensureDbSynced();
       const { id } = req.params;
       const { farmaceuta_id } = req.body;
-      const vId = Number(id);
+      const numId = Number(id);
 
-      await db.update(visitas)
-        .set({ estado_id: 3 })
-        .where(eq(visitas.id, vId));
+      // Match by numeric ID or by codigo_verificacion
+      let vRecord: any = null;
+      if (!isNaN(numId) && numId > 0) {
+        const byId = await db.select().from(visitas).where(eq(visitas.id, numId)).limit(1);
+        if (byId.length > 0) vRecord = byId[0];
+      }
 
-      await db.update(recetas)
-        .set({
-          estado: 3,
-          farmaceuta_id: farmaceuta_id || 1,
-          dispensado_fecha: new Date()
-        })
-        .where(eq(recetas.visita_id, vId));
+      if (!vRecord) {
+        const byCode = await db.select().from(visitas).where(eq(visitas.codigo_verificacion, String(id))).limit(1);
+        if (byCode.length > 0) vRecord = byCode[0];
+      }
 
-      const completeVisita = await db.query.visitas.findFirst({
-        where: eq(visitas.id, vId),
-        with: {
-          paciente: true,
-          medico: true,
-          diagnostico: true,
-          recetas: { with: { medicamento: true, farmaceuta: true } },
-          examenes: { with: { examen: true } },
-          epicrisis: true
-        }
-      });
+      if (vRecord) {
+        const vId = vRecord.id;
+        await db.update(visitas)
+          .set({ estado_id: 3 })
+          .where(eq(visitas.id, vId));
 
-      res.json(completeVisita);
+        await db.update(recetas)
+          .set({
+            estado: 3,
+            farmaceuta_id: farmaceuta_id ? Number(farmaceuta_id) : 1,
+            dispensado_fecha: new Date()
+          })
+          .where(eq(recetas.visita_id, vId));
+
+        const completeVisita = await db.query.visitas.findFirst({
+          where: eq(visitas.id, vId),
+          with: {
+            paciente: true,
+            medico: true,
+            diagnostico: true,
+            recetas: { with: { medicamento: true, farmaceuta: true } },
+            examenes: { with: { examen: true } },
+            epicrisis: true
+          }
+        });
+
+        return res.json(completeVisita);
+      }
+
+      res.status(404).json({ error: 'Receta / Visita no encontrada' });
     } catch (e) {
-      console.error(e);
+      console.error('[PUT /visitas/:id/dispensar-todo ERROR]:', e);
       res.status(500).json({ error: String(e) });
     }
   });
