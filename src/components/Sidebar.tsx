@@ -9,7 +9,8 @@ import {
   Building2,
   Stethoscope,
   ShieldCheck,
-  Activity
+  Activity,
+  QrCode
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,7 +26,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeRole,
   pendingVisitasCount
 }) => {
+  // Navigation strictly structured by Role (HU1 / Diagrama de Flujo)
   const navItems = [
+    // -------------------------------------------------------------
+    // ROL MÉDICO / CIRUJANO DENTISTA (Menú Clínico Completo)
+    // -------------------------------------------------------------
     {
       id: 'dashboard' as ViewTab,
       label: 'Panel Principal',
@@ -34,11 +39,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'nueva-receta' as ViewTab,
-      label: 'Consulta Médica',
+      label: 'Crear Receta Médica',
       icon: PlusCircle,
       badge: 'Médico',
       roles: ['medico']
     },
+    {
+      id: 'pacientes' as ViewTab,
+      label: 'Ficha Clínica e Historial',
+      icon: Users,
+      roles: ['medico']
+    },
+    {
+      id: 'examenes' as ViewTab,
+      label: 'Solicitud de Exámenes',
+      icon: Activity,
+      roles: ['medico']
+    },
+    {
+      id: 'visitas' as ViewTab,
+      label: 'Historial de Recetas',
+      icon: FileText,
+      roles: ['medico']
+    },
+    {
+      id: 'medicamentos' as ViewTab,
+      label: 'Catálogo de Fármacos',
+      icon: Pill,
+      roles: ['medico']
+    },
+    {
+      id: 'medicos' as ViewTab,
+      label: 'Cuerpo Médico',
+      icon: Stethoscope,
+      roles: ['medico']
+    },
+
+    // -------------------------------------------------------------
+    // ROL QUÍMICO FARMACÉUTICO (Menú QF - Dispensación y Quema)
+    // -------------------------------------------------------------
     {
       id: 'farmacia-despacho' as ViewTab,
       label: 'Dispensación y Quema',
@@ -48,38 +87,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'visitas' as ViewTab,
-      label: activeRole === 'farmacia' ? 'Bandeja de Recetas' : 'Historial de Recetas',
+      label: 'Bandeja de Recetas',
       icon: FileText,
       count: pendingVisitasCount > 0 ? pendingVisitasCount : undefined,
-      roles: ['medico', 'farmacia']
-    },
-    {
-      id: 'pacientes' as ViewTab,
-      label: 'Fichas de Pacientes',
-      icon: Users,
-      roles: ['medico']
+      roles: ['farmacia']
     },
     {
       id: 'medicamentos' as ViewTab,
-      label: activeRole === 'farmacia' ? 'Vademécum Farmacéutico' : 'Catálogo de Fármacos',
+      label: 'Vademécum Farmacéutico',
       icon: Pill,
-      roles: ['medico', 'farmacia']
+      roles: ['farmacia']
     },
-    {
-      id: 'examenes' as ViewTab,
-      label: 'Catálogo de Exámenes',
-      icon: Activity,
-      roles: ['medico']
-    },
-    {
-      id: 'medicos' as ViewTab,
-      label: 'Cuerpo Médico',
-      icon: Stethoscope,
-      roles: ['medico']
-    },
+
+    // -------------------------------------------------------------
+    // PORTAL DE VALIDACIÓN PÚBLICA (Ambos Roles)
+    // -------------------------------------------------------------
     {
       id: 'verificador-publico' as ViewTab,
-      label: 'Validación Pública',
+      label: 'Validación Pública QR',
       icon: ShieldCheck,
       roles: ['medico', 'farmacia']
     }
@@ -91,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className="no-print w-64 shrink-0 bg-white border-r border-slate-200 min-h-[calc(100vh-4rem)] p-4 flex flex-col justify-between">
       <div className="space-y-1">
         <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
-          Módulos del Sistema
+          {activeRole === 'farmacia' ? 'Menú Químico Farmacéutico (QF)' : 'Menú Clínico (Médico / Dentista)'}
         </div>
 
         {visibleItems.map((item) => {
@@ -99,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const isActive = currentTab === item.id;
           return (
             <button
-              key={item.id}
+              key={`${item.id}-${item.roles.join('-')}`}
               onClick={() => onSelectTab(item.id)}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                 isActive
@@ -132,10 +157,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5">
         <div className="flex items-center gap-1.5 text-sky-900 font-semibold">
           <ShieldCheck className="w-4 h-4 text-[#0284c7]" />
-          Conectado a Red MINSAL
+          {activeRole === 'farmacia' ? 'Farmacia Habilitada MINSAL' : 'Registro Nacional de Prestadores'}
         </div>
         <p className="text-slate-500 text-[11px] leading-relaxed">
-          Normativa vigente de firma electrónica avanzada y validación criptográfica en línea.
+          {activeRole === 'farmacia'
+            ? 'Validación en línea y quema digital de recetas según Decreto Supremo Nº 466.'
+            : 'Firma electrónica y prescripción médica regulada según Código Sanitario DFL 725.'}
         </p>
       </div>
     </aside>

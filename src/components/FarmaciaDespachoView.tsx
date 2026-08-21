@@ -18,7 +18,11 @@ import {
   User,
   Flame,
   ArrowRight,
-  Eye
+  Eye,
+  QrCode,
+  Camera,
+  Check,
+  Sparkles
 } from 'lucide-react';
 
 interface FarmaciaDespachoViewProps {
@@ -38,13 +42,33 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
   onQuemarItemMedicamento,
   onViewReceta
 }) => {
+  // Mode: QR Reader vs Manual Search (US-03 vs US-04)
+  const [activeInputMode, setActiveInputMode] = useState<'qr' | 'manual'>('qr');
+  const [isScanningQr, setIsScanningQr] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [foundVisita, setFoundVisita] = useState<Visita | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [dispenseSuccessMessage, setDispenseSuccessMessage] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'burned'>('all');
 
-  const handleSearch = (e?: React.FormEvent) => {
+  // US-03: Quick QR Scan / Automatic Resolution
+  const handleScanQrDirect = (v: Visita) => {
+    setIsScanningQr(true);
+    setDispenseSuccessMessage('');
+    setTimeout(() => {
+      setIsScanningQr(false);
+      setSearchInput(v.codigo_verificacion);
+      setFoundVisita(v);
+      setHasSearched(true);
+      const topElem = document.getElementById('detalle-receta-qf');
+      if (topElem) {
+        topElem.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 450);
+  };
+
+  // US-04: Manual Search by RUT or Folio
+  const handleManualSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setDispenseSuccessMessage('');
     if (!searchInput.trim()) {
@@ -56,7 +80,7 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
     const term = searchInput.trim().toUpperCase();
     const cleanSearchRut = cleanRut(term);
 
-    // Look for exact or partial match on verification code or patient RUT
+    // Match verification code or patient RUT
     const match = visitas.find((v) => {
       const matchCode = v.codigo_verificacion?.toUpperCase().includes(term);
       const matchRut = cleanRut(`${v.paciente?.rut || ''}${v.paciente?.dv || ''}`).includes(cleanSearchRut);
@@ -72,12 +96,13 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
     setFoundVisita(v);
     setHasSearched(true);
     setDispenseSuccessMessage('');
-    const topElem = document.getElementById('dispensacion-top');
+    const topElem = document.getElementById('detalle-receta-qf');
     if (topElem) {
       topElem.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
+  // US-05: Total Burning (Invalidate / Complete Recipe)
   const handleQuemarTodo = () => {
     if (!foundVisita) return;
     const farmName = `${activeFarmaceuta.nombres || 'Farmacéutico'} ${activeFarmaceuta.paterno || ''} (${activeFarmacia.nombre.split('-')[0]})`.trim();
@@ -95,9 +120,10 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
       setFoundVisita({ ...foundVisita, estado_id: 3 });
     }
 
-    setDispenseSuccessMessage('¡Receta completamente dispensada y quemada con éxito! Registro validado en MINSAL.');
+    setDispenseSuccessMessage('¡Receta 100% dispensada y quemada! Estado actualizado a "Invalidada / Completada" (Bloqueada para nuevos cobros).');
   };
 
+  // US-05: Individual Item Burning with Circular Action Control
   const handleQuemarItem = (itemId: number) => {
     if (!foundVisita) return;
     const farmName = `${activeFarmaceuta.nombres || 'Farmacéutico'} ${activeFarmaceuta.paterno || ''} (${activeFarmacia.nombre.split('-')[0]})`.trim();
@@ -109,7 +135,7 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
       if (updated) setFoundVisita(updated);
     }, 100);
 
-    setDispenseSuccessMessage('Medicamento individual dispensado y descontado.');
+    setDispenseSuccessMessage('Medicamento individual entregado y descontado de la receta.');
   };
 
   // Filtered list for the overview table
@@ -129,16 +155,16 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
             <Building2 className="w-6 h-6 text-[#0284c7]" />
-            Dispensación y Quema de Recetas en Farmacia
+            Módulo Químico Farmacéutico (QF) - Dispensación y Quema
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Módulo oficial de verificación criptográfica, validación MINSAL y quemado de prescripciones médicas.
+            Recepción de recetas electrónicas, lectura de código QR, verificación MINSAL y quema digital de medicamentos (HU2 / US-03, US-04, US-05).
           </p>
         </div>
 
         <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-2.5 text-xs text-right shadow-xs">
           <span className="font-bold text-[#0369a1] block">{activeFarmacia.nombre}</span>
-          <span className="text-[#0284c7]">Responsable: {activeFarmaceuta.nombres} {activeFarmaceuta.paterno}</span>
+          <span className="text-[#0284c7]">Químico Farmacéutico: {activeFarmaceuta.nombres} {activeFarmaceuta.paterno}</span>
         </div>
       </div>
 
@@ -146,7 +172,7 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Total Recetas Emitidas</span>
+            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Total Recetas en Sistema</span>
             <span className="text-2xl font-bold text-slate-900 mt-0.5 block">{visitas.length}</span>
           </div>
           <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center text-[#0284c7]">
@@ -166,7 +192,7 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
 
         <div className="bg-white p-4 rounded-xl border border-rose-200 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-xs text-rose-700 font-semibold uppercase tracking-wider block">Recetas Quemadas / Finalizadas</span>
+            <span className="text-xs text-rose-700 font-semibold uppercase tracking-wider block">Recetas Invalidadas / Quemadas</span>
             <span className="text-2xl font-bold text-rose-900 mt-0.5 block">{burnedCount}</span>
           </div>
           <div className="w-10 h-10 rounded-lg bg-rose-50 flex items-center justify-center text-rose-500">
@@ -175,59 +201,151 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
         </div>
       </div>
 
-      {/* Search Prescription Form */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-          <Search className="w-4 h-4 text-[#0284c7]" />
-          Buscar Receta por Código o RUT
-        </h2>
+      {/* Input Selection Mode: QR Scanner vs Manual RUT/Folio */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveInputMode('qr')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeInputMode === 'qr'
+                  ? 'bg-sky-500 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <QrCode className="w-4 h-4" />
+              1. Leer Código QR (Escaneo Directo - US-03)
+            </button>
 
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Ej. REC-2026-0001, ER-2025-001 o RUT del Paciente (18492019)..."
-              className="w-full pl-10 pr-4 py-3 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#0284c7] focus:bg-white focus:outline-none transition-all"
-            />
+            <button
+              onClick={() => setActiveInputMode('manual')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeInputMode === 'manual'
+                  ? 'bg-sky-500 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              2. Ingresar RUT / Folio Manual (US-04)
+            </button>
           </div>
 
-          <button
-            type="submit"
-            className="px-6 py-3 bg-[#0284c7] hover:bg-[#0369a1] text-white font-bold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            Validar y Consultar
-          </button>
-        </form>
+          <span className="text-xs text-slate-400 font-medium">
+            Protocolo Sanitario MINSAL D.S. Nº 466
+          </span>
+        </div>
 
-        {/* Quick Suggestion Chips */}
-        <div className="flex items-center gap-2 text-xs text-slate-500 pt-1 flex-wrap">
-          <span className="font-semibold text-slate-400">Recetas recientes:</span>
-          {visitas.slice(0, 4).map((v) => (
-            <button
-              key={v.id}
-              onClick={() => handleSelectVisita(v)}
-              className="px-2.5 py-1 bg-slate-100 hover:bg-sky-50 hover:text-sky-700 rounded-lg text-slate-700 font-mono transition-colors border border-slate-200 cursor-pointer"
-            >
-              {v.codigo_verificacion}
-            </button>
-          ))}
-          {hasSearched && (
+        {/* Mode 1: QR Code Scanner (US-03) */}
+        {activeInputMode === 'qr' && (
+          <div className="space-y-4">
+            <div className="p-5 bg-gradient-to-r from-sky-50/70 to-blue-50/70 border border-sky-200 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-5">
+              <div className="space-y-1.5 text-center md:text-left">
+                <div className="flex items-center justify-center md:justify-start gap-2 text-sky-900 font-bold text-sm">
+                  <Camera className="w-4 h-4 text-sky-600 animate-pulse" />
+                  Lector de Código QR Activo para Farmacia
+                </div>
+                <p className="text-xs text-slate-600 max-w-xl">
+                  Al leer el código QR de la receta física o del teléfono del paciente, el sistema salta <strong>directamente al detalle de la prescripción</strong>, cargando de inmediato los fármacos autorizados para su dispensación.
+                </p>
+              </div>
+
+              {isScanningQr ? (
+                <div className="flex items-center gap-2 px-5 py-2.5 bg-sky-600 text-white text-xs font-bold rounded-xl shadow-xs">
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Procesando Código QR...
+                </div>
+              ) : (
+                <div className="text-xs font-semibold text-sky-800 bg-white/80 px-3.5 py-2 rounded-xl border border-sky-200">
+                  Listo para escanear
+                </div>
+              )}
+            </div>
+
+            {/* Simulated Live QR Presets from DB */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                Escanear receta disponible (Salto Directo a Detalle):
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {visitas.slice(0, 6).map((v) => {
+                  const isBurned = v.estado_id === 3;
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => handleScanQrDirect(v)}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                        foundVisita?.id === v.id
+                          ? 'border-sky-500 bg-sky-50/80 shadow-xs ring-2 ring-sky-200'
+                          : isBurned
+                          ? 'border-slate-200 bg-slate-50/60 opacity-80 hover:border-slate-300'
+                          : 'border-sky-200 bg-white hover:border-sky-400 hover:shadow-xs'
+                      }`}
+                    >
+                      <div className="space-y-0.5 truncate">
+                        <div className="flex items-center gap-1.5">
+                          <QrCode className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                          <span className="font-mono font-bold text-xs text-slate-900 truncate">
+                            {v.codigo_verificacion}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 truncate">
+                          {v.paciente?.nombres} {v.paciente?.paterno}
+                        </div>
+                      </div>
+
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                        isBurned ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {isBurned ? 'Quemada' : 'Activa'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mode 2: Manual Search by RUT or Folio (US-04) */}
+        {activeInputMode === 'manual' && (
+          <div className="space-y-3">
+            <form onSubmit={handleManualSearch} className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Ingrese Folio (ej. REC-2026-0001) o RUT del Paciente (ej. 18492019-4)..."
+                  className="w-full pl-10 pr-4 py-3 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#0284c7] focus:bg-white focus:outline-none transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="px-6 py-3 bg-[#0284c7] hover:bg-[#0369a1] text-white font-bold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Buscar Receta
+              </button>
+            </form>
+          </div>
+        )}
+
+        {hasSearched && (
+          <div className="flex justify-end pt-1">
             <button
               onClick={() => {
                 setHasSearched(false);
                 setFoundVisita(null);
                 setSearchInput('');
               }}
-              className="px-2 py-1 text-rose-600 hover:underline ml-auto font-medium cursor-pointer"
+              className="text-xs text-slate-500 hover:text-rose-600 font-semibold cursor-pointer"
             >
-              Ver todas las recetas
+              ✕ Cerrar detalle actual
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {dispenseSuccessMessage && (
@@ -237,9 +355,9 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
         </div>
       )}
 
-      {/* Result Container: Single Recipe Detail */}
+      {/* Result Container: Single Recipe Detail (Mostrar Detalle de Receta - US-03, US-05) */}
       {hasSearched && (
-        <div>
+        <div id="detalle-receta-qf">
           {foundVisita ? (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden space-y-6">
               {/* Header Status Bar */}
@@ -262,15 +380,16 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
                   {foundVisita.estado_id === 3 ? (
                     <div className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 border border-rose-500/40 text-xs font-bold text-rose-400">
                       <Lock className="w-4 h-4" />
-                      RECETA QUEMADA / AGOTADA
+                      RECETA INVALIDADA / COMPLETADA (QUEMADA)
                     </div>
                   ) : (
                     <button
                       onClick={handleQuemarTodo}
                       className="px-5 py-2.5 bg-[#f27271] hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                      title="Dispensar todos los medicamentos y cambiar estado a Invalidada"
                     >
                       <Flame className="w-4 h-4" />
-                      Dispensar y Quemar Toda la Receta
+                      Dispensar y Quemar Toda la Receta (100%)
                     </button>
                   )}
 
@@ -316,20 +435,23 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
 
                     {foundVisita.tratamiento && (
                       <p className="text-xs text-slate-600 mt-1">
-                        Indicaciones Generales: {foundVisita.tratamiento}
+                        Indicaciones: {foundVisita.tratamiento}
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* Drugs Dispensing Table */}
+                {/* Drugs Dispensing Table with Circular Action Controls (US-05) */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center justify-between">
-                    <span>Medicamentos para Dispensación</span>
-                    <span className="text-xs font-normal text-slate-500">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Pill className="w-4 h-4 text-sky-600" />
+                      Medicamentos Prescritos para Dispensación (Control Circular)
+                    </h3>
+                    <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
                       {foundVisita.recetas?.filter((r) => r.estado === 3).length || 0} de {foundVisita.recetas?.length || 0} entregados
                     </span>
-                  </h3>
+                  </div>
 
                   <div className="divide-y divide-slate-200 border border-slate-200 rounded-xl overflow-hidden shadow-xs">
                     {foundVisita.recetas && foundVisita.recetas.length > 0 ? (
@@ -338,49 +460,75 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
                         const itemBadge = getStatusBadge(item.estado);
 
                         return (
-                          <div key={item.id || idx} className="p-4 bg-white hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold bg-sky-100 text-sky-900 px-2 py-0.5 rounded">
-                                  #{idx + 1}
-                                </span>
-                                <span className="font-bold text-slate-900 text-sm">
-                                  {item.medicamento?.descripcion}
-                                </span>
-                                {item.medicamento?.restriccion && (
-                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 border text-slate-700">
-                                    {item.medicamento.restriccion}
-                                  </span>
+                          <div
+                            key={item.id || idx}
+                            className={`p-4 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                              isItemDispensado ? 'bg-slate-50/80' : 'bg-white hover:bg-sky-50/30'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3.5">
+                              {/* US-05 Criterio 1: Botón circular de acción */}
+                              <button
+                                disabled={isItemDispensado}
+                                onClick={() => handleQuemarItem(item.id)}
+                                title={isItemDispensado ? 'Fármaco ya entregado/quemado' : 'Hacer clic para dispensar/quemar este medicamento (Control Circular)'}
+                                className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center transition-all cursor-pointer ${
+                                  isItemDispensado
+                                    ? 'bg-emerald-500 text-white shadow-xs cursor-default'
+                                    : 'border-2 border-sky-400 bg-sky-50 text-sky-600 hover:bg-sky-500 hover:text-white hover:scale-105 shadow-xs'
+                                }`}
+                              >
+                                {isItemDispensado ? (
+                                  <Check className="w-5 h-5 stroke-[2.5]" />
+                                ) : (
+                                  <Flame className="w-4 h-4" />
                                 )}
-                              </div>
+                              </button>
 
-                              <p className="text-xs text-slate-600">
-                                Posología: <strong>{item.tratamiento}</strong>
-                              </p>
-
-                              <div className="flex items-center gap-4 text-[11px] text-slate-500">
-                                <span>Cantidad autorizada: <strong>{item.cantidad || 1} caja(s)</strong></span>
-                                {item.dispensado_fecha && (
-                                  <span className="text-emerald-700 font-semibold">
-                                    ✓ Entregado el {formatDate(item.dispensado_fecha)} ({item.farmaceuta_nombre})
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-900 text-sm">
+                                    {item.medicamento?.descripcion}
                                   </span>
-                                )}
+                                  {item.medicamento?.restriccion && (
+                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 border text-slate-700">
+                                      {item.medicamento.restriccion}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <p className="text-xs text-slate-600">
+                                  Posología: <strong>{item.tratamiento}</strong>
+                                </p>
+
+                                <div className="flex items-center gap-4 text-[11px] text-slate-500">
+                                  <span>Cantidad autorizada: <strong>{item.cantidad || 1} caja(s)</strong></span>
+                                  {item.dispensado_fecha && (
+                                    <span className="text-emerald-700 font-semibold">
+                                      ✓ Entregado el {formatDate(item.dispensado_fecha)} ({item.farmaceuta_nombre})
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
                               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${itemBadge.bg} ${itemBadge.text} ${itemBadge.border}`}>
                                 {itemBadge.label}
                               </span>
 
-                              {!isItemDispensado && (
+                              {!isItemDispensado ? (
                                 <button
                                   onClick={() => handleQuemarItem(item.id)}
-                                  className="px-4 py-2 bg-[#0284c7] hover:bg-[#0369a1] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                  className="px-3.5 py-1.5 bg-[#0284c7] hover:bg-[#0369a1] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                                 >
                                   <PackageCheck className="w-3.5 h-3.5" />
-                                  Dispensar Fármaco
+                                  Quemar Ítem
                                 </button>
+                              ) : (
+                                <span className="text-xs font-semibold text-slate-400 italic">
+                                  Dispensado
+                                </span>
                               )}
                             </div>
                           </div>
@@ -388,7 +536,7 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
                       })
                     ) : (
                       <div className="p-6 text-center text-slate-400 text-sm bg-slate-50/50">
-                        Esta atención no incluye medicamentos farmacológicos prescritos (control médico / orden de exámenes).
+                        Esta atención no incluye medicamentos farmacológicos prescritos.
                       </div>
                     )}
                   </div>
@@ -549,3 +697,4 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
     </div>
   );
 };
+
