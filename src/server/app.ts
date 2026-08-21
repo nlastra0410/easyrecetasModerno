@@ -15,16 +15,6 @@ import {
   epicrisis
 } from '../db/schema.js';
 import { eq, or, sql } from 'drizzle-orm';
-import {
-  initialPacientes,
-  initialMedicos,
-  initialDiagnosticos,
-  initialMedicamentos,
-  initialExamenes,
-  initialFarmacias,
-  initialFarmaceutas,
-  initialVisitas
-} from '../data/initialData.js';
 import twilio from 'twilio';
 import nodemailer from 'nodemailer';
 
@@ -418,158 +408,7 @@ async function ensureDbSynced() {
     await db.execute(sql`ALTER TABLE visitas ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT NOW();`);
     await db.execute(sql`ALTER TABLE recetas ADD COLUMN IF NOT EXISTS activo char(1) DEFAULT 'X';`);
 
-    // 2. Auto-seed if tables are empty
-    const pCount = await db.select().from(pacientes);
-    if (pCount.length === 0) {
-      console.log('[DB SYNC] Neon DB is empty. Seeding initial records...');
-      await db.insert(pacientes).values(initialPacientes.map(p => ({
-        rut: p.rut, dv: p.dv, nombres: p.nombres, paterno: p.paterno, materno: p.materno,
-        fecha_nacimiento: p.fecha_nacimiento ? new Date(p.fecha_nacimiento).toISOString().split('T')[0] : null,
-        correo: p.correo, telefono: p.telefono, direccion: p.direccion, activo: p.activo
-      })));
-      await db.insert(medicos).values(initialMedicos.map(m => ({
-        nombres: m.nombres, apellidos: m.apellidos, rut: m.rut, dv: m.dv, registro_minsal: m.registro_minsal,
-        especialidad: m.especialidad, correo: m.correo, telefono: m.telefono, activo: m.activo
-      })));
-      await db.insert(diagnostico).values(initialDiagnosticos.map(d => ({
-        codigo: d.codigo, descripcion: d.descripcion, activo: d.activo
-      })));
-      await db.insert(medicamentos).values(initialMedicamentos.map(m => ({
-        codigo: m.codigo, descripcion: m.descripcion, laboratorio: m.laboratorio, departamento: m.departamento,
-        restriccion: m.restriccion, forma_farmaceutica: m.forma_farmaceutica, presentacion: m.presentacion, activo: m.activo
-      })));
-      await db.insert(examenes).values(initialExamenes.map(e => ({
-        codigo: e.codigo, nombre: e.nombre, descripcion: e.descripcion, activo: e.activo
-      })));
-      await db.insert(farmacias).values(initialFarmacias.map(f => ({
-        nombre: f.nombre, direccion: f.direccion, comuna: f.comuna, ciudad: f.ciudad, telefono: f.telefono, rut: f.rut
-      })));
-      await db.insert(farmaceutas).values(initialFarmaceutas.map(f => ({
-        nombres: f.nombres, paterno: f.paterno, materno: f.materno, rut: f.rut, dv: f.dv, farmacia_id: f.farmacia_id,
-        correo: f.correo, activo: f.activo
-      })));
-
-      // Seed initial visits and prescriptions
-      for (const vi of initialVisitas) {
-        const [vRow] = await db.insert(visitas).values({
-          medico_id: vi.medico_id,
-          paciente_id: vi.paciente_id,
-          diagnostico_id: vi.diagnostico_id || null,
-          tratamiento: vi.tratamiento,
-          fecha: vi.fecha ? new Date(vi.fecha) : new Date(),
-          estado_id: vi.estado_id || 1,
-          codigo_verificacion: vi.codigo_verificacion,
-          activo: 'X'
-        }).returning();
-
-        if (vi.recetas && vi.recetas.length > 0) {
-          await db.insert(recetas).values(vi.recetas.map(r => ({
-            visita_id: vRow.id,
-            medicamento_id: r.medicamento_id,
-            tratamiento: r.tratamiento,
-            cantidad: r.cantidad || 1,
-            duracion: r.duracion,
-            estado: r.estado || 1,
-            farmaceuta_id: r.farmaceuta_id || null,
-            dispensado_fecha: r.dispensado_fecha ? new Date(r.dispensado_fecha) : null,
-            activo: 'X'
-          })));
-        }
-      }
-      console.log('[DB SYNC] Initial data and visits seeded successfully.');
-    } else {
-      // Ensure all medicos exist and have updated info (e.g. Dr. Nelson)
-      for (const m of initialMedicos) {
-        const existing = await db.query.medicos.findFirst({
-          where: or(eq(medicos.rut, m.rut), eq(medicos.rut, `${m.rut}-${m.dv}`))
-        });
-        if (!existing) {
-          await db.insert(medicos).values({
-            nombres: m.nombres,
-            apellidos: m.apellidos,
-            rut: m.rut,
-            dv: m.dv,
-            telefono: m.telefono,
-            correo: m.correo,
-            registro_minsal: m.registro_minsal,
-            especialidad: m.especialidad,
-            activo: 'X'
-          });
-        } else {
-          await db.update(medicos).set({
-            nombres: m.nombres,
-            apellidos: m.apellidos,
-            dv: m.dv,
-            telefono: m.telefono,
-            correo: m.correo,
-            registro_minsal: m.registro_minsal,
-            especialidad: m.especialidad
-          }).where(eq(medicos.id, existing.id));
-        }
-      }
-
-      // Ensure Maximiliano Lastra exists in pacientes in DB
-      for (const p of initialPacientes) {
-        const existingPac = await db.query.pacientes.findFirst({
-          where: or(eq(pacientes.rut, p.rut), eq(pacientes.rut, `${p.rut}-${p.dv}`))
-        });
-        if (!existingPac) {
-          await db.insert(pacientes).values({
-            rut: p.rut,
-            dv: p.dv,
-            nombres: p.nombres,
-            paterno: p.paterno,
-            materno: p.materno,
-            fecha_nacimiento: p.fecha_nacimiento ? new Date(p.fecha_nacimiento).toISOString().split('T')[0] : null,
-            correo: p.correo,
-            telefono: p.telefono,
-            direccion: p.direccion,
-            activo: p.activo || 'X'
-          });
-        } else {
-          await db.update(pacientes).set({
-            nombres: p.nombres,
-            paterno: p.paterno,
-            materno: p.materno,
-            correo: p.correo,
-            telefono: p.telefono,
-            direccion: p.direccion
-          }).where(eq(pacientes.id, existingPac.id));
-        }
-      }
-
-      // Ensure Dr. Nelson's visit with Maximiliano exists
-      const existingVisitas = await db.select().from(visitas);
-      if (existingVisitas.length === 0) {
-        for (const vi of initialVisitas) {
-          const [vRow] = await db.insert(visitas).values({
-            medico_id: vi.medico_id,
-            paciente_id: vi.paciente_id,
-            diagnostico_id: vi.diagnostico_id || null,
-            tratamiento: vi.tratamiento,
-            fecha: vi.fecha ? new Date(vi.fecha) : new Date(),
-            estado_id: vi.estado_id || 1,
-            codigo_verificacion: vi.codigo_verificacion,
-            activo: 'X'
-          }).returning();
-
-          if (vi.recetas && vi.recetas.length > 0) {
-            await db.insert(recetas).values(vi.recetas.map(r => ({
-              visita_id: vRow.id,
-              medicamento_id: r.medicamento_id,
-              tratamiento: r.tratamiento,
-              cantidad: r.cantidad || 1,
-              duracion: r.duracion,
-              estado: r.estado || 1,
-              farmaceuta_id: r.farmaceuta_id || null,
-              dispensado_fecha: r.dispensado_fecha ? new Date(r.dispensado_fecha) : null,
-              activo: 'X'
-            })));
-          }
-        }
-      }
-    }
-
+    // Ensure all tables and columns are ready in the PostgreSQL database
     dbSyncDone = true;
   } catch (dbSyncErr) {
     console.warn("[DB SYNC NOTICE]", (dbSyncErr as any)?.message || dbSyncErr);
@@ -628,17 +467,7 @@ export function createExpressApp() {
           )
         });
       } catch (dbErr) {
-        console.warn("[DB QUERY WARNING - Using mock fallback]:", (dbErr as any)?.message || dbErr);
-      }
-
-      // In-memory fallback if not found in DB or DB not reachable
-      if (!medico && !farmaceuta) {
-        medico = initialMedicos.find(m =>
-          m.rut === rutNum || m.rut === cleanRut || m.rut === rut || `${m.rut}-${m.dv}` === cleanRut || `${m.rut}${m.dv}` === cleanRut
-        );
-        farmaceuta = initialFarmaceutas.find(f =>
-          f.rut === rutNum || f.rut === cleanRut || f.rut === rut || `${f.rut}-${f.dv}` === cleanRut || `${f.rut}${f.dv}` === cleanRut
-        );
+        console.warn("[DB QUERY WARNING]:", (dbErr as any)?.message || dbErr);
       }
 
       if (!medico && !farmaceuta) {
@@ -753,11 +582,11 @@ export function createExpressApp() {
     try {
       await ensureDbSynced();
 
-      let p = await db.select().from(pacientes).catch((err) => {
+      let p = await db.select().from(pacientes).catch((err: any) => {
         console.error('Error fetching pacientes from DB:', err);
         return [];
       });
-      let m = await db.select().from(medicos).catch((err) => {
+      let m = await db.select().from(medicos).catch((err: any) => {
         console.error('Error fetching medicos from DB:', err);
         return [];
       });
@@ -782,33 +611,33 @@ export function createExpressApp() {
             },
             epicrisis: true
           },
-          orderBy: (visitas, { desc }) => [desc(visitas.fecha)]
+          orderBy: (visitasTable: any, { desc }: { desc: any }) => [desc(visitasTable.fecha)]
         });
       } catch (visitasErr) {
         console.warn('Could not query visitas from DB:', (visitasErr as any)?.message || visitasErr);
       }
 
       res.json({
-        pacientes: p.length > 0 ? p : initialPacientes,
-        medicos: m.length > 0 ? m : initialMedicos,
-        diagnosticos: d.length > 0 ? d : initialDiagnosticos,
-        medicamentos: meds.length > 0 ? meds : initialMedicamentos,
-        examenes: ex.length > 0 ? ex : initialExamenes,
-        farmacias: f.length > 0 ? f : initialFarmacias,
-        farmaceutas: ph.length > 0 ? ph : initialFarmaceutas,
-        visitas: v.length > 0 ? v : initialVisitas
+        pacientes: p,
+        medicos: m,
+        diagnosticos: d,
+        medicamentos: meds,
+        examenes: ex,
+        farmacias: f,
+        farmaceutas: ph,
+        visitas: v
       });
     } catch (e) {
       console.error("[INIT ERROR]:", e);
       res.json({
-        pacientes: initialPacientes,
-        medicos: initialMedicos,
-        diagnosticos: initialDiagnosticos,
-        medicamentos: initialMedicamentos,
-        examenes: initialExamenes,
-        farmacias: initialFarmacias,
-        farmaceutas: initialFarmaceutas,
-        visitas: initialVisitas
+        pacientes: [],
+        medicos: [],
+        diagnosticos: [],
+        medicamentos: [],
+        examenes: [],
+        farmacias: [],
+        farmaceutas: [],
+        visitas: []
       });
     }
   });
@@ -1032,8 +861,8 @@ export function createExpressApp() {
         const remaining = await db.select().from(recetas).where(
            eq(recetas.visita_id, vId)
         );
-        const allDispensadas = remaining.length === 0 || remaining.every(r => r.estado === 3);
-        const anyDispensadas = remaining.some(r => r.estado === 3);
+        const allDispensadas = remaining.length === 0 || remaining.every((r: any) => r.estado === 3);
+        const anyDispensadas = remaining.some((r: any) => r.estado === 3);
         
         await db.update(visitas)
           .set({ estado_id: allDispensadas ? 3 : (anyDispensadas ? 2 : 1) })

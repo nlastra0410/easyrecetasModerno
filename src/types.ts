@@ -30,6 +30,7 @@ export interface Diagnostico {
   codigo: string;
   descripcion: string;
   categoria?: string;
+  activo?: string;
 }
 
 export interface Profesion {
@@ -51,6 +52,7 @@ export interface Medico {
   correo: string;
   telefono: string;
   firma_digital?: string;
+  activo?: string;
 }
 
 export interface Examen {

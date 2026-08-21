@@ -12,15 +12,7 @@ import {
   Examen
 } from './types';
 import {
-  initialProfesiones,
-  initialPacientes,
-  initialMedicamentos,
-  initialDiagnosticos,
-  initialExamenes,
-  initialMedicos,
-  initialFarmacias,
-  initialFarmaceutas,
-  initialVisitas
+  initialProfesiones
 } from './data/initialData';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -68,67 +60,24 @@ export const App: React.FC = () => {
         throw new Error(`Status ${res.status}`);
       }
       const data = await res.json();
-
-      if (data && Array.isArray(data.pacientes) && data.pacientes.length > 0) {
-        populateData(data);
-      } else {
-        // Try seeding if empty
-        try {
-          await fetch('/api/seed', { method: 'POST' });
-          const res2 = await fetch('/api/init');
-          if (res2.ok) {
-            const data2 = await res2.json();
-            if (data2 && Array.isArray(data2.pacientes) && data2.pacientes.length > 0) {
-              populateData(data2);
-              return;
-            }
-          }
-        } catch {
-          // Ignore
-        }
-        populateFallbackData();
-      }
+      populateData(data);
     } catch (err) {
-      console.warn('Backend /api/init not ready, utilizing robust local dataset:', err);
-      populateFallbackData();
+      console.warn('Backend /api/init error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const populateFallbackData = () => {
-    // Check localStorage cache first
-    let cachedPacientes: Paciente[] | null = null;
-    let cachedVisitas: Visita[] | null = null;
-    try {
-      const savedP = localStorage.getItem('easyrecetas_pacientes');
-      if (savedP) cachedPacientes = JSON.parse(savedP);
-      const savedV = localStorage.getItem('easyrecetas_visitas');
-      if (savedV) cachedVisitas = JSON.parse(savedV);
-    } catch {
-      // Ignore
-    }
-
-    setPacientes(cachedPacientes && cachedPacientes.length ? cachedPacientes : initialPacientes);
-    setMedicamentos(initialMedicamentos);
-    setDiagnosticos(initialDiagnosticos);
-    setExamenes(initialExamenes);
-    setMedicos(initialMedicos);
-    setFarmacias(initialFarmacias);
-    setFarmaceutas(initialFarmaceutas);
-    setVisitas(cachedVisitas && cachedVisitas.length ? cachedVisitas : initialVisitas);
-  };
-
   const populateData = (data: any) => {
-    const serverPacientes: Paciente[] = Array.isArray(data.pacientes) && data.pacientes.length ? data.pacientes : initialPacientes;
-    setPacientes(serverPacientes);
-    setMedicamentos(Array.isArray(data.medicamentos) && data.medicamentos.length ? data.medicamentos : initialMedicamentos);
-    setDiagnosticos(Array.isArray(data.diagnosticos) && data.diagnosticos.length ? data.diagnosticos : initialDiagnosticos);
-    setExamenes(Array.isArray(data.examenes) && data.examenes.length ? data.examenes : initialExamenes);
-    setMedicos(Array.isArray(data.medicos) && data.medicos.length ? data.medicos : initialMedicos);
-    setFarmacias(Array.isArray(data.farmacias) && data.farmacias.length ? data.farmacias : initialFarmacias);
-    setFarmaceutas(Array.isArray(data.farmaceutas) && data.farmaceutas.length ? data.farmaceutas : initialFarmaceutas);
-    setVisitas(Array.isArray(data.visitas) && data.visitas.length ? data.visitas : initialVisitas);
+    if (!data) return;
+    setPacientes(Array.isArray(data.pacientes) ? data.pacientes : []);
+    setMedicamentos(Array.isArray(data.medicamentos) ? data.medicamentos : []);
+    setDiagnosticos(Array.isArray(data.diagnosticos) ? data.diagnosticos : []);
+    setExamenes(Array.isArray(data.examenes) ? data.examenes : []);
+    setMedicos(Array.isArray(data.medicos) ? data.medicos : []);
+    setFarmacias(Array.isArray(data.farmacias) ? data.farmacias : []);
+    setFarmaceutas(Array.isArray(data.farmaceutas) ? data.farmaceutas : []);
+    setVisitas(Array.isArray(data.visitas) ? data.visitas : []);
   };
 
   useEffect(() => {
