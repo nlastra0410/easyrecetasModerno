@@ -40,32 +40,46 @@ try {
   }
 } catch {
   console.warn('[AI Studio] Database not connected — using in-memory mock fallback');
-  const noOp = {
-    findMany: async () => [],
-    findFirst: async () => null,
-    findUnique: async () => null,
-    create: async (d: any) => d?.data ?? {},
-    update: async (d: any) => d?.data ?? {},
-    delete: async () => ({})
+
+  // Universal chainable promise proxy that supports any Drizzle ORM call chain
+  const createMockChain = (defaultVal: any = []) => {
+    const targetPromise = Promise.resolve(defaultVal);
+    const chainHandler: ProxyHandler<any> = {
+      get: (_target, prop) => {
+        if (prop === 'then') return (onFulfilled?: any, onRejected?: any) => targetPromise.then(onFulfilled, onRejected);
+        if (prop === 'catch') return (onRejected?: any) => targetPromise.catch(onRejected);
+        if (prop === 'finally') return (onFinally?: any) => targetPromise.finally(onFinally);
+        if (prop === Symbol.toStringTag) return 'Promise';
+        return (..._args: any[]) => new Proxy(targetPromise, chainHandler);
+      },
+      apply: (_target, _thisArg, _argList) => {
+        return new Proxy(targetPromise, chainHandler);
+      }
+    };
+    return new Proxy(targetPromise, chainHandler);
   };
+
   dbInstance = new Proxy({}, {
     get: (_, prop) => {
       if (prop === 'query') {
         return new Proxy({}, {
           get: () => new Proxy({}, {
-            get: () => async () => []
+            get: (__, method) => {
+              if (method === 'findFirst' || method === 'findUnique') {
+                return async () => null;
+              }
+              return async () => [];
+            }
           })
         });
       }
-      if (prop === 'execute' || prop === 'select' || prop === 'insert' || prop === 'update' || prop === 'delete') {
-        return () => ({
-          from: () => ({ where: () => [], orderBy: () => [] }),
-          values: () => ({ returning: async () => [] }),
-          set: () => ({ where: () => ({ returning: async () => [] }) }),
-          where: () => []
-        });
+      if (prop === 'execute') {
+        return async () => ({ rows: [] });
       }
-      return async () => [];
+      if (prop === 'select' || prop === 'insert' || prop === 'update' || prop === 'delete') {
+        return () => createMockChain([]);
+      }
+      return createMockChain([]);
     },
   });
 }

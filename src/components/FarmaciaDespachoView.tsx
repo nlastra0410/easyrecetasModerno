@@ -151,20 +151,23 @@ export const FarmaciaDespachoView: React.FC<FarmaciaDespachoViewProps> = ({
   return (
     <div id="dispensacion-top" className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-200 pb-5">
         <div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold mb-1.5 border border-emerald-200">
+            <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Módulo Exclusivo Farmacia</span>
+          </div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
-            <Building2 className="w-6 h-6 text-[#0284c7]" />
-            Módulo Químico Farmacéutico (QF) - Dispensación y Quema
+            Químico Farmacéutico (QF) - Dispensación y Quema
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             Recepción de recetas electrónicas, lectura de código QR, verificación MINSAL y quema digital de medicamentos (HU2 / US-03, US-04, US-05).
           </p>
         </div>
 
-        <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-2.5 text-xs text-right shadow-xs">
-          <span className="font-bold text-[#0369a1] block">{activeFarmacia.nombre}</span>
-          <span className="text-[#0284c7]">Químico Farmacéutico: {activeFarmaceuta.nombres} {activeFarmaceuta.paterno}</span>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-right shadow-xs">
+          <span className="font-bold text-emerald-900 block">{activeFarmacia.nombre}</span>
+          <span className="text-emerald-700 font-semibold">Químico Farmacéutico: {activeFarmaceuta.nombres} {activeFarmaceuta.paterno}</span>
         </div>
       </div>
 

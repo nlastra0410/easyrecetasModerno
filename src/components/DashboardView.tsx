@@ -47,43 +47,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Welcome Banner */}
+      {/* Welcome Banner (Clinical) */}
       <div className="bg-gradient-to-r from-sky-700 via-sky-800 to-blue-900 rounded-2xl p-6 sm:p-8 text-white shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-2 max-w-xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-sky-200 text-xs font-semibold border border-white/20">
             <CheckCircle2 className="w-3.5 h-3.5 text-sky-300" />
-            {isFarmacia ? 'Módulo de Validación y Dispensación Farmacéutica' : 'Sistema Clínico Operativo y Seguro'}
+            Sistema Clínico de Prescripción Médica y Odontológica
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            {isFarmacia ? 'Dispensación y Quema de Recetas en Farmacia' : 'Gestión Integral de Recetas Médicas'}
+            Panel Médico - Prescripción Electrónica
           </h1>
           <p className="text-sky-100/90 text-sm leading-relaxed">
-            {isFarmacia 
-              ? 'Verificación criptográfica, validación en línea con MINSAL y control de dispensación/quemado parcial y total de medicamentos.' 
-              : 'Plataforma digital para la emisión rápida, seguimiento y dispensación de recetas médicas electrónicas con validación MINSAL.'}
+            Emisión de recetas médicas electrónicas con firma digital avanzada, órdenes de exámenes clínicos y gestión de fichas de pacientes con validación MINSAL.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {!isFarmacia && (
-            <button
-              onClick={() => onSelectTab('nueva-receta')}
-              className="px-5 py-2.5 bg-white hover:bg-sky-50 text-[#0284c7] font-bold rounded-xl text-sm flex items-center gap-2 transition-all shadow-md cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4 text-[#0284c7]" />
-              Emitir Nueva Receta
-            </button>
-          )}
           <button
-            onClick={() => onSelectTab('farmacia-despacho')}
-            className={`px-5 py-2.5 font-bold rounded-xl text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md ${
-              isFarmacia
-                ? 'bg-white hover:bg-sky-50 text-[#0284c7]'
-                : 'bg-sky-900/60 hover:bg-sky-900 text-white border border-sky-400/30'
-            }`}
+            onClick={() => onSelectTab('nueva-receta')}
+            className="px-5 py-3 bg-white hover:bg-sky-50 text-[#0284c7] font-bold rounded-xl text-sm flex items-center gap-2 transition-all shadow-md cursor-pointer"
           >
-            <Building2 className="w-4 h-4" />
-            Dispensar en Farmacia
+            <PlusCircle className="w-4 h-4 text-[#0284c7]" />
+            Emitir Nueva Receta
+          </button>
+          <button
+            onClick={() => onSelectTab('pacientes')}
+            className="px-5 py-3 bg-sky-900/60 hover:bg-sky-900 text-white font-bold rounded-xl text-sm flex items-center gap-2 transition-all cursor-pointer border border-sky-400/30 shadow-md"
+          >
+            <Users className="w-4 h-4" />
+            Fichas de Pacientes
           </button>
         </div>
       </div>

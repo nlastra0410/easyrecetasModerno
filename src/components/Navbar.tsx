@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewTab, Medico, Farmacia, Farmaceuta } from '../types';
-import { User, LogOut } from 'lucide-react';
+import { User, LogOut, Stethoscope, Building2 } from 'lucide-react';
 import { EasyLogo } from './EasyLogo';
 
 interface NavbarProps {
@@ -23,6 +23,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeFarmaceuta,
   onLogout
 }) => {
+  const isFarmacia = activeRole === 'farmacia';
+
+  const getDoctorRoleLabel = () => {
+    if (!activeMedico) return 'Médico Prescriptor';
+    const spec = (activeMedico.especialidad || activeMedico.profesion_nombre || '').toLowerCase();
+    if (spec.includes('dentista') || spec.includes('odonto')) {
+      return 'Cirujano Dentista';
+    }
+    return activeMedico.especialidad || 'Médico Cirujano';
+  };
+
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs">
       <div className="flex justify-between items-center h-16 px-6">
@@ -46,26 +57,44 @@ export const Navbar: React.FC<NavbarProps> = ({
               Acceso Profesionales
             </button>
           ) : (
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5 shadow-2xs">
-              <div className="flex items-center gap-2 mr-4 border-r border-slate-200 pr-4">
-                <div className="w-7 h-7 bg-sky-100 rounded-full flex items-center justify-center text-[#0284c7]">
-                  <User className="w-4 h-4" />
+            <div className={`flex items-center rounded-full px-4 py-1.5 shadow-2xs border ${
+              isFarmacia ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-2.5 mr-4 border-r border-slate-200 pr-4">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                  isFarmacia ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-[#0284c7]'
+                }`}>
+                  {isFarmacia ? <Building2 className="w-4 h-4" /> : <Stethoscope className="w-4 h-4" />}
                 </div>
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-slate-800 leading-none">
                     {activeRole === 'medico' && activeMedico
-                      ? (activeMedico.nombres?.startsWith('Dr.') || activeMedico.nombres?.startsWith('Dra.')
-                          ? `${activeMedico.nombres} ${activeMedico.apellidos || ''}`.trim()
-                          : `Dr. ${activeMedico.nombres} ${activeMedico.apellidos || ''}`.trim())
+                      ? (() => {
+                          const docName = (activeMedico.nombres || (activeMedico as any).nombre || '').trim();
+                          const docLastName = (activeMedico.apellidos || (activeMedico as any).apellido || (activeMedico as any).paterno || '').trim();
+                          const full = `${docName} ${docLastName}`.trim() || 'Médico Tratante';
+                          if (full.startsWith('Dr.') || full.startsWith('Dra.')) {
+                            return full;
+                          }
+                          return `Dr. ${full}`;
+                        })()
                       : ''}
                     {activeRole === 'farmacia'
-                      ? (activeFarmaceuta
-                          ? `${activeFarmaceuta.nombres} ${activeFarmaceuta.paterno || ''}`.trim()
-                          : (activeFarmacia?.nombre || 'Farmacéutico Responsable'))
+                      ? (() => {
+                          if (activeFarmaceuta) {
+                            const fName = (activeFarmaceuta.nombres || (activeFarmaceuta as any).nombre || '').trim();
+                            const fLast = (activeFarmaceuta.paterno || (activeFarmaceuta as any).apellido || activeFarmaceuta.materno || '').trim();
+                            const full = `${fName} ${fLast}`.trim();
+                            if (full) return `QF. ${full}`;
+                          }
+                          return activeFarmacia?.nombre || 'Químico Farmacéutico Responsable';
+                        })()
                       : ''}
                   </span>
-                  <span className="text-[10px] text-sky-600 font-semibold uppercase tracking-wider mt-0.5">
-                    {activeRole === 'medico' ? 'Médico Tratante' : 'Químico Farmacéutico'}
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider mt-0.5 ${
+                    isFarmacia ? 'text-emerald-700 font-bold' : 'text-sky-700 font-semibold'
+                  }`}>
+                    {activeRole === 'medico' ? getDoctorRoleLabel() : 'Químico Farmacéutico (QF)'}
                   </span>
                 </div>
               </div>

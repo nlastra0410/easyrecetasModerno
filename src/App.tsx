@@ -291,7 +291,9 @@ export const App: React.FC = () => {
 
   // Active Contexts
   const activeMedico = activeRole === 'medico' ? authenticatedUser : medicos[0];
-  const activeFarmacia = activeRole === 'farmacia' ? authenticatedUser : (farmacias[0] || { id: 1, nombre: 'Farmacia Central EasyRecetas', direccion: 'Av. Providencia 1208', ciudad: 'Santiago' });
+  const activeFarmacia = activeRole === 'farmacia' 
+    ? (farmacias.find(f => f.id === authenticatedUser?.farmacia_id) || farmacias[0] || { id: 1, nombre: 'Farmacia Central EasyRecetas', direccion: 'Av. Providencia 1208', ciudad: 'Santiago', comuna: 'Providencia', telefono: '+56223456789', rut: '76543210-K' })
+    : (farmacias[0] || { id: 1, nombre: 'Farmacia Central EasyRecetas', direccion: 'Av. Providencia 1208', ciudad: 'Santiago', comuna: 'Providencia', telefono: '+56223456789', rut: '76543210-K' });
   const activeFarmaceuta = activeRole === 'farmacia' ? authenticatedUser : (farmaceutas[0] || { id: 1, nombres: 'Químico Farmacéutico', paterno: 'de Turno' });
 
   const pendingCount = visitas.filter((v) => v.estado_id !== 3).length;

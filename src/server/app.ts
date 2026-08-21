@@ -233,6 +233,228 @@ async function sendPrescriptionEmail(toEmail: string, visita: any): Promise<bool
   return false;
 }
 
+const DEFAULT_MEDICOS = [
+  {
+    id: 1,
+    nombres: 'Dr. Roberto Carlos',
+    apellidos: 'Vargas Silva',
+    rut: '14285719',
+    dv: '3',
+    telefono: '+56 9 8451 2293',
+    correo: 'dr.vargas@easyreceta.cl',
+    registro_minsal: 'RNM-482910',
+    especialidad: 'Medicina Interna',
+    activo: 'X'
+  },
+  {
+    id: 2,
+    nombres: 'Dra. Marcela Andrea',
+    apellidos: 'Pavez Muñoz',
+    rut: '16738920',
+    dv: 'K',
+    telefono: '+56 9 7122 4589',
+    correo: 'dra.pavez@easyreceta.cl',
+    registro_minsal: 'RNM-592811',
+    especialidad: 'Pediatría y Salud Infantil',
+    activo: 'X'
+  },
+  {
+    id: 3,
+    nombres: 'Dr. Esteban Javier',
+    apellidos: 'Morales Alarcón',
+    rut: '12490182',
+    dv: '5',
+    telefono: '+56 9 9234 1102',
+    correo: 'dr.morales@easyreceta.cl',
+    registro_minsal: 'RNM-301928',
+    especialidad: 'Cardiología Clínica',
+    activo: 'X'
+  },
+  {
+    id: 4,
+    nombres: 'Dr. Nelson',
+    apellidos: 'Lastra Delgado',
+    rut: '16778715',
+    dv: '0',
+    telefono: '+56934456811',
+    correo: 'nelsonlastra4@gmail.com',
+    registro_minsal: 'RNM-715820',
+    especialidad: 'Medicina General y Familiar',
+    activo: 'X'
+  },
+  {
+    id: 5,
+    nombres: 'Dr. Hans',
+    apellidos: 'Lembach Palma',
+    rut: '12792034',
+    dv: '6',
+    telefono: '+56912345678',
+    correo: 'qflembach@gmail.com',
+    registro_minsal: 'RNM-639102',
+    especialidad: 'Medicina General',
+    activo: 'X'
+  },
+  {
+    id: 6,
+    nombres: 'Dr. Roberto',
+    apellidos: 'González Pinto',
+    rut: '14567890',
+    dv: '1',
+    telefono: '+56976543210',
+    correo: 'rgonzalez.dental@gmail.com',
+    registro_minsal: 'RNM-329871',
+    especialidad: 'Cirujano Dentista / Odontología',
+    activo: 'X'
+  },
+  {
+    id: 7,
+    nombres: 'Nelson',
+    apellidos: 'Lastra',
+    rut: '12345678',
+    dv: '5',
+    telefono: '+56934456811',
+    correo: 'nelsonlastra4@gmail.com',
+    registro_minsal: 'RNM-849201',
+    especialidad: 'Médico Cirujano (Medicina General)',
+    activo: 'X'
+  }
+];
+
+const DEFAULT_FARMACIAS = [
+  {
+    id: 1,
+    nombre: 'Farmacia Cruz Verde Centro',
+    direccion: 'Av. Providencia 1208',
+    comuna: 'Providencia',
+    ciudad: 'Santiago',
+    telefono: '+56223456789',
+    rut: '76543210-K'
+  },
+  {
+    id: 2,
+    nombre: 'Farmacia Salcobrand Los Leones',
+    direccion: 'Av. Las Condes 9400',
+    comuna: 'Las Condes',
+    ciudad: 'Santiago',
+    telefono: '+56229876543',
+    rut: '77123456-7'
+  }
+];
+
+const DEFAULT_FARMACEUTAS = [
+  {
+    id: 1,
+    nombres: 'Esteban Andrés',
+    paterno: 'López',
+    materno: 'Vega',
+    rut: '16892103',
+    dv: '9',
+    farmacia_id: 1,
+    correo: 'esteban.lopez@cruzverde.cl',
+    telefono: '+56934456811',
+    activo: 'X'
+  },
+  {
+    id: 2,
+    nombres: 'Carolina Paz',
+    paterno: 'Figueroa',
+    materno: 'Sanhueza',
+    rut: '17892011',
+    dv: '2',
+    farmacia_id: 2,
+    correo: 'carolina.figueroa@salcobrand.cl',
+    telefono: '+56987654321',
+    activo: 'X'
+  },
+  {
+    id: 3,
+    nombres: 'Hans',
+    paterno: 'Lembach',
+    materno: 'Palma',
+    rut: '12792034',
+    dv: '6',
+    farmacia_id: 1,
+    correo: 'hplembac@uc.cl',
+    telefono: '+56912345678',
+    activo: 'X'
+  },
+  {
+    id: 4,
+    nombres: 'Vicente Andres',
+    paterno: 'Saavedra',
+    materno: 'Rojas',
+    rut: '18731753',
+    dv: '3',
+    farmacia_id: 2,
+    correo: 'nelsonlastra4@gmail.com',
+    telefono: '+56934456811',
+    activo: 'X'
+  },
+  {
+    id: 5,
+    nombres: 'Andrés',
+    paterno: 'Silva',
+    materno: 'Oyarzún',
+    rut: '18715853',
+    dv: '3',
+    farmacia_id: 1,
+    correo: 'nelsonlastra4@gmail.com',
+    telefono: '+56934456811',
+    activo: 'X'
+  }
+];
+
+// Universal RUT matcher that handles all Chilean format variations:
+// e.g. 18.731.753-3, 18731753-3, 187317533, 18731753, with or without leading zeros
+function isRutMatching(recordRut: any, recordDv: any, inputRut: string): boolean {
+  if (!inputRut) return false;
+  const cleanInput = String(inputRut).replace(/[^0-9Kk]/g, '').toUpperCase();
+  const cleanRecordRut = String(recordRut || '').replace(/[^0-9Kk]/g, '').toUpperCase();
+  const cleanRecordDv = String(recordDv || '').replace(/[^0-9Kk]/g, '').toUpperCase();
+  
+  if (!cleanInput || !cleanRecordRut) return false;
+
+  const fullRecord = `${cleanRecordRut}${cleanRecordDv}`;
+
+  // 1. Direct match with full combined RUT+DV (e.g. "187317533" === "187317533")
+  if (cleanInput === fullRecord) return true;
+
+  // 2. Direct match with body only (e.g. "18731753" === "18731753")
+  if (cleanInput === cleanRecordRut) return true;
+
+  // 3. User typed body + DV together without punctuation (e.g. "187317533" -> body "18731753", DV "3")
+  if (cleanInput.length > 1) {
+    const inputBody = cleanInput.slice(0, -1);
+    const inputDv = cleanInput.slice(-1);
+    if (inputBody === cleanRecordRut) {
+      if (!cleanRecordDv || inputDv === cleanRecordDv) {
+        return true;
+      }
+    }
+  }
+
+  // 4. User typed with dash (e.g. "18731753-3")
+  if (String(inputRut).includes('-')) {
+    const parts = String(inputRut).split('-');
+    const bBefore = parts[0].replace(/[^0-9Kk]/g, '').toUpperCase();
+    const bAfter = (parts[1] || '').replace(/[^0-9Kk]/g, '').toUpperCase();
+    if (bBefore === cleanRecordRut) {
+      if (!bAfter || !cleanRecordDv || bAfter === cleanRecordDv) {
+        return true;
+      }
+    }
+  }
+
+  // 5. Zero-padded comparisons
+  const normInput = cleanInput.replace(/^0+/, '');
+  const normRecord = cleanRecordRut.replace(/^0+/, '');
+  if (normInput === normRecord || normInput === `${normRecord}${cleanRecordDv}`) {
+    return true;
+  }
+
+  return false;
+}
+
 let dbSyncDone = false;
 async function ensureDbSynced() {
   if (dbSyncDone) return;
@@ -421,6 +643,54 @@ async function ensureDbSynced() {
     await db.execute(sql`ALTER TABLE visitas ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT NOW();`);
     await db.execute(sql`ALTER TABLE recetas ADD COLUMN IF NOT EXISTS activo char(1) DEFAULT 'X';`);
 
+    // Seed default doctors if medicos table is empty
+    try {
+      const medCountRes: any = await db.execute(sql`SELECT count(*)::int as count FROM medicos;`);
+      const count = Number(medCountRes?.rows?.[0]?.count || medCountRes?.[0]?.count || 0);
+      if (count === 0) {
+        for (const m of DEFAULT_MEDICOS) {
+          await db.execute(sql`
+            INSERT INTO medicos (nombres, apellidos, rut, dv, telefono, correo, registro_minsal, especialidad, activo)
+            VALUES (${m.nombres}, ${m.apellidos}, ${m.rut}, ${m.dv}, ${m.telefono}, ${m.correo}, ${m.registro_minsal}, ${m.especialidad}, 'X');
+          `);
+        }
+      }
+    } catch (seedMedErr) {
+      console.warn('[SEED MEDICOS WARN]', seedMedErr);
+    }
+
+    // Seed default pharmacies if farmacias table is empty
+    try {
+      const farmCountRes: any = await db.execute(sql`SELECT count(*)::int as count FROM farmacias;`);
+      const count = Number(farmCountRes?.rows?.[0]?.count || farmCountRes?.[0]?.count || 0);
+      if (count === 0) {
+        for (const f of DEFAULT_FARMACIAS) {
+          await db.execute(sql`
+            INSERT INTO farmacias (nombre, direccion, comuna, ciudad, telefono, rut)
+            VALUES (${f.nombre}, ${f.direccion}, ${f.comuna}, ${f.ciudad}, ${f.telefono}, ${f.rut});
+          `);
+        }
+      }
+    } catch (seedFarmErr) {
+      console.warn('[SEED FARMACIAS WARN]', seedFarmErr);
+    }
+
+    // Seed default pharmacists if farmaceutas table is empty
+    try {
+      const phCountRes: any = await db.execute(sql`SELECT count(*)::int as count FROM farmaceutas;`);
+      const count = Number(phCountRes?.rows?.[0]?.count || phCountRes?.[0]?.count || 0);
+      if (count === 0) {
+        for (const ph of DEFAULT_FARMACEUTAS) {
+          await db.execute(sql`
+            INSERT INTO farmaceutas (nombres, paterno, materno, rut, dv, farmacia_id, correo, activo)
+            VALUES (${ph.nombres}, ${ph.paterno}, ${ph.materno}, ${ph.rut}, ${ph.dv}, ${ph.farmacia_id}, ${ph.correo}, 'X');
+          `);
+        }
+      }
+    } catch (seedPhErr) {
+      console.warn('[SEED FARMACEUTAS WARN]', seedPhErr);
+    }
+
     // Ensure all tables and columns are ready in the PostgreSQL database
     dbSyncDone = true;
   } catch (dbSyncErr) {
@@ -455,47 +725,67 @@ export function createExpressApp() {
 
       await ensureDbSynced();
 
-      const cleanRut = String(rut).replace(/[^0-9Kk]/g, '').toUpperCase();
+      const inputRutStr = String(rut).trim();
+      const cleanRut = inputRutStr.replace(/[^0-9Kk]/g, '').toUpperCase();
       const rutNum = cleanRut.length > 1 ? cleanRut.slice(0, -1) : cleanRut;
       const formattedRutWithDash = cleanRut.length > 1 ? `${cleanRut.slice(0, -1)}-${cleanRut.slice(-1)}` : cleanRut;
 
       let medico: any = null;
       let farmaceuta: any = null;
 
+      // 1. Fetch live doctors from Postgres DB
+      let dbMedicosList: any[] = [];
       try {
-        medico = await db.query.medicos.findFirst({
-          where: or(
-            eq(medicos.rut, rutNum),
-            eq(medicos.rut, cleanRut),
-            eq(medicos.rut, String(rut)),
-            eq(medicos.rut, formattedRutWithDash)
-          )
-        });
-        farmaceuta = await db.query.farmaceutas.findFirst({
-          where: or(
-            eq(farmaceutas.rut, rutNum),
-            eq(farmaceutas.rut, cleanRut),
-            eq(farmaceutas.rut, String(rut)),
-            eq(farmaceutas.rut, formattedRutWithDash)
-          )
-        });
+        const medRes: any = await db.execute(sql`SELECT * FROM medicos;`);
+        dbMedicosList = medRes?.rows || (Array.isArray(medRes) ? medRes : []);
       } catch (dbErr) {
-        console.warn("[DB QUERY WARNING]:", (dbErr as any)?.message || dbErr);
+        console.warn("[DB QUERY MEDICOS WARNING]:", (dbErr as any)?.message || dbErr);
       }
 
+      // Combine with default medicos list to ensure 100% availability
+      const allMedicos = [...dbMedicosList, ...DEFAULT_MEDICOS];
+      medico = allMedicos.find(m => isRutMatching(m.rut, m.dv, inputRutStr));
+
+      // 2. Fetch live pharmacists from Postgres DB
+      let dbFarmaceutasList: any[] = [];
+      try {
+        const phRes: any = await db.execute(sql`SELECT * FROM farmaceutas;`);
+        dbFarmaceutasList = phRes?.rows || (Array.isArray(phRes) ? phRes : []);
+      } catch (dbErr) {
+        console.warn("[DB QUERY FARMACEUTAS WARNING]:", (dbErr as any)?.message || dbErr);
+      }
+
+      // Combine with default farmaceutas list
+      const allFarmaceutas = [...dbFarmaceutasList, ...DEFAULT_FARMACEUTAS];
+      farmaceuta = allFarmaceutas.find(ph => isRutMatching(ph.rut, ph.dv, inputRutStr));
+
       if (!medico && !farmaceuta) {
-        return res.status(404).json({ error: `RUT ${rut} no encontrado en el cuerpo médico ni farmacéutico.` });
+        return res.status(404).json({ 
+          error: `RUT ${rut} no encontrado en los registros de Médicos, Dentistas ni Químicos Farmacéuticos de la base de datos. Verifica el número ingresado.` 
+        });
       }
 
       const user = medico || farmaceuta;
-      const role = medico ? 'medico' : 'farmacia';
+      const role: 'medico' | 'farmacia' = medico ? 'medico' : 'farmacia';
+      
+      const isDentist = medico && (
+        medico.especialidad?.toLowerCase().includes('dentista') || 
+        medico.especialidad?.toLowerCase().includes('odonto') ||
+        medico.profesion_nombre?.toLowerCase().includes('dentista')
+      );
+
+      const roleLabel = medico 
+        ? (isDentist ? 'Cirujano Dentista' : 'Médico Cirujano / Prescriptor')
+        : 'Químico Farmacéutico (Farmacia)';
 
       // Generate 6-digit OTP token
       const token = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // Store in memory (fast cache)
+      // Store in memory (fast cache) under multiple variations
       authTokens.set(cleanRut, { token, user, role, expires: Date.now() + 10 * 60 * 1000 });
       authTokens.set(rutNum, { token, user, role, expires: Date.now() + 10 * 60 * 1000 });
+      authTokens.set(inputRutStr, { token, user, role, expires: Date.now() + 10 * 60 * 1000 });
+      authTokens.set(formattedRutWithDash, { token, user, role, expires: Date.now() + 10 * 60 * 1000 });
 
       // Persist in Neon PostgreSQL database for stateless/serverless environments
       try {
@@ -543,6 +833,10 @@ export function createExpressApp() {
 
       res.json({
         message: 'Código de seguridad generado',
+        role,
+        roleLabel,
+        userName,
+        userSpecialty: medico?.especialidad || (farmaceuta ? 'Química y Farmacia' : ''),
         phoneLastDigits,
         emailMask,
         userEmail,
@@ -565,20 +859,21 @@ export function createExpressApp() {
         return res.status(400).json({ error: 'RUT y código de seguridad son obligatorios.' });
       }
 
-      const cleanRut = String(rut || '').replace(/[^0-9Kk]/g, '').toUpperCase();
+      const inputRutStr = String(rut).trim();
+      const cleanRut = inputRutStr.replace(/[^0-9Kk]/g, '').toUpperCase();
       const rutNum = cleanRut.length > 1 ? cleanRut.slice(0, -1) : cleanRut;
       const formattedRutWithDash = cleanRut.length > 1 ? `${cleanRut.slice(0, -1)}-${cleanRut.slice(-1)}` : cleanRut;
       const tokenInput = String(token).trim();
 
       // 1. Check in-memory fast cache
-      let authData = authTokens.get(cleanRut) || authTokens.get(rutNum);
+      let authData = authTokens.get(cleanRut) || authTokens.get(rutNum) || authTokens.get(inputRutStr) || authTokens.get(formattedRutWithDash);
 
       // 2. If not found in memory (e.g. Vercel serverless / multi-instance), check PostgreSQL database
       if (!authData) {
         try {
           const dbTokens: any = await db.execute(sql`
             SELECT * FROM auth_tokens
-            WHERE (rut = ${cleanRut} OR rut = ${rutNum} OR rut = ${formattedRutWithDash} OR rut = ${String(rut)})
+            WHERE (rut = ${cleanRut} OR rut = ${rutNum} OR rut = ${formattedRutWithDash} OR rut = ${inputRutStr})
             ORDER BY id DESC
             LIMIT 1;
           `);
@@ -611,6 +906,7 @@ export function createExpressApp() {
       if (Date.now() > authData.expires) {
         authTokens.delete(cleanRut);
         authTokens.delete(rutNum);
+        authTokens.delete(inputRutStr);
         try {
           await db.execute(sql`DELETE FROM auth_tokens WHERE (rut = ${cleanRut} OR rut = ${rutNum});`);
         } catch (e) {}
@@ -624,6 +920,7 @@ export function createExpressApp() {
       // Success: clean token and respond
       authTokens.delete(cleanRut);
       authTokens.delete(rutNum);
+      authTokens.delete(inputRutStr);
       try {
         await db.execute(sql`DELETE FROM auth_tokens WHERE (rut = ${cleanRut} OR rut = ${rutNum});`);
       } catch (e) {}
@@ -651,19 +948,21 @@ export function createExpressApp() {
     try {
       await ensureDbSynced();
 
-      let p = await db.select().from(pacientes).catch((err: any) => {
-        console.error('Error fetching pacientes from DB:', err);
-        return [];
-      });
-      let m = await db.select().from(medicos).catch((err: any) => {
-        console.error('Error fetching medicos from DB:', err);
-        return [];
-      });
-      let d = await db.select().from(diagnostico).catch(() => []);
-      let meds = await db.select().from(medicamentos).catch(() => []);
-      let ex = await db.select().from(examenes).catch(() => []);
-      let f = await db.select().from(farmacias).catch(() => []);
-      let ph = await db.select().from(farmaceutas).catch(() => []);
+      let p: any[] = [];
+      let m: any[] = [];
+      let d: any[] = [];
+      let meds: any[] = [];
+      let ex: any[] = [];
+      let f: any[] = [];
+      let ph: any[] = [];
+
+      try { p = await db.select().from(pacientes); } catch (err) { console.error('Error fetching pacientes from DB:', err); }
+      try { m = await db.select().from(medicos); } catch (err) { console.error('Error fetching medicos from DB:', err); }
+      try { d = await db.select().from(diagnostico); } catch {}
+      try { meds = await db.select().from(medicamentos); } catch {}
+      try { ex = await db.select().from(examenes); } catch {}
+      try { f = await db.select().from(farmacias); } catch {}
+      try { ph = await db.select().from(farmaceutas); } catch {}
 
       let v: any[] = [];
       try {
@@ -688,24 +987,24 @@ export function createExpressApp() {
 
       res.json({
         pacientes: p,
-        medicos: m,
+        medicos: m.length > 0 ? m : DEFAULT_MEDICOS,
         diagnosticos: d,
         medicamentos: meds,
         examenes: ex,
-        farmacias: f,
-        farmaceutas: ph,
+        farmacias: f.length > 0 ? f : DEFAULT_FARMACIAS,
+        farmaceutas: ph.length > 0 ? ph : DEFAULT_FARMACEUTAS,
         visitas: v
       });
     } catch (e) {
       console.error("[INIT ERROR]:", e);
       res.json({
         pacientes: [],
-        medicos: [],
+        medicos: DEFAULT_MEDICOS,
         diagnosticos: [],
         medicamentos: [],
         examenes: [],
-        farmacias: [],
-        farmaceutas: [],
+        farmacias: DEFAULT_FARMACIAS,
+        farmaceutas: DEFAULT_FARMACEUTAS,
         visitas: []
       });
     }
