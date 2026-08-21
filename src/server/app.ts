@@ -12,9 +12,10 @@ import {
   visitas,
   recetas,
   orden_examenes,
-  epicrisis
+  epicrisis,
+  authTokensTable
 } from '../db/schema.js';
-import { eq, or, sql } from 'drizzle-orm';
+import { eq, or, sql, desc } from 'drizzle-orm';
 import twilio from 'twilio';
 import nodemailer from 'nodemailer';
 
@@ -385,6 +386,18 @@ async function ensureDbSynced() {
       );
     `);
 
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS auth_tokens (
+        id SERIAL PRIMARY KEY,
+        rut VARCHAR(50) NOT NULL,
+        token VARCHAR(20) NOT NULL,
+        user_data TEXT,
+        role VARCHAR(50) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
     // Ensure all required columns exist in Neon database
     await db.execute(sql`ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS correo varchar(255);`);
     await db.execute(sql`ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS telefono varchar(50);`);
@@ -480,9 +493,20 @@ export function createExpressApp() {
       // Generate 6-digit OTP token
       const token = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // Store in memory
-      authTokens.set(cleanRut, { token, user, role, expires: Date.now() + 5 * 60 * 1000 });
-      authTokens.set(rutNum, { token, user, role, expires: Date.now() + 5 * 60 * 1000 });
+      // Store in memory (fast cache)
+      authTokens.set(cleanRut, { token, user, role, expires: Date.now() + 10 * 60 * 1000 });
+      authTokens.set(rutNum, { token, user, role, expires: Date.now() + 10 * 60 * 1000 });
+
+      // Persist in Neon PostgreSQL database for stateless/serverless environments
+      try {
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        await db.execute(sql`
+          INSERT INTO auth_tokens (rut, token, user_data, role, expires_at)
+          VALUES (${cleanRut}, ${token}, ${JSON.stringify(user)}, ${role}, ${expiresAt.toISOString()});
+        `);
+      } catch (tokDbErr) {
+        console.warn("[DB AUTH_TOKENS INSERT WARNING]:", (tokDbErr as any)?.message || tokDbErr);
+      }
 
       // 1. Send SMS if Twilio is configured
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -537,10 +561,48 @@ export function createExpressApp() {
   apiRouter.post('/auth/verify-token', async (req, res) => {
     try {
       const { rut, token } = req.body;
+      if (!rut || !token) {
+        return res.status(400).json({ error: 'RUT y código de seguridad son obligatorios.' });
+      }
+
       const cleanRut = String(rut || '').replace(/[^0-9Kk]/g, '').toUpperCase();
       const rutNum = cleanRut.length > 1 ? cleanRut.slice(0, -1) : cleanRut;
+      const formattedRutWithDash = cleanRut.length > 1 ? `${cleanRut.slice(0, -1)}-${cleanRut.slice(-1)}` : cleanRut;
+      const tokenInput = String(token).trim();
 
-      const authData = authTokens.get(cleanRut) || authTokens.get(rutNum);
+      // 1. Check in-memory fast cache
+      let authData = authTokens.get(cleanRut) || authTokens.get(rutNum);
+
+      // 2. If not found in memory (e.g. Vercel serverless / multi-instance), check PostgreSQL database
+      if (!authData) {
+        try {
+          const dbTokens: any = await db.execute(sql`
+            SELECT * FROM auth_tokens
+            WHERE (rut = ${cleanRut} OR rut = ${rutNum} OR rut = ${formattedRutWithDash} OR rut = ${String(rut)})
+            ORDER BY id DESC
+            LIMIT 1;
+          `);
+
+          const row = dbTokens?.rows?.[0] || dbTokens?.[0];
+          if (row) {
+            let parsedUser = null;
+            try {
+              parsedUser = typeof row.user_data === 'string' ? JSON.parse(row.user_data) : row.user_data;
+            } catch (e) {
+              parsedUser = row.user_data;
+            }
+
+            authData = {
+              token: String(row.token).trim(),
+              user: parsedUser,
+              role: row.role,
+              expires: new Date(row.expires_at).getTime()
+            };
+          }
+        } catch (dbErr) {
+          console.warn("[DB AUTH_TOKENS QUERY WARNING]:", (dbErr as any)?.message || dbErr);
+        }
+      }
 
       if (!authData) {
         return res.status(400).json({ error: 'No hay un token activo para este RUT o ya expiró.' });
@@ -549,20 +611,27 @@ export function createExpressApp() {
       if (Date.now() > authData.expires) {
         authTokens.delete(cleanRut);
         authTokens.delete(rutNum);
+        try {
+          await db.execute(sql`DELETE FROM auth_tokens WHERE (rut = ${cleanRut} OR rut = ${rutNum});`);
+        } catch (e) {}
         return res.status(400).json({ error: 'El token ha expirado. Solicite uno nuevo.' });
       }
 
-      if (authData.token !== String(token).trim()) {
+      if (authData.token !== tokenInput) {
         return res.status(400).json({ error: 'Código de seguridad incorrecto.' });
       }
 
-      // Success
+      // Success: clean token and respond
       authTokens.delete(cleanRut);
       authTokens.delete(rutNum);
+      try {
+        await db.execute(sql`DELETE FROM auth_tokens WHERE (rut = ${cleanRut} OR rut = ${rutNum});`);
+      } catch (e) {}
+
       res.json({ user: authData.user, role: authData.role });
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: String(e) });
+      console.error("[VERIFY TOKEN ERROR]:", e);
+      res.status(500).json({ error: String((e as any)?.message || e) });
     }
   });
 
