@@ -106,10 +106,28 @@ export const NuevaRecetaView: React.FC<NuevaRecetaViewProps> = ({
 
   const selectedPaciente = pacientes.find((p) => p.id === Number(selectedPacienteId));
 
-  const filteredDiagnosticos = diagnosticos.filter((d) => {
-    const term = diagnosticoSearch.toLowerCase();
-    return d.codigo.toLowerCase().includes(term) || d.descripcion.toLowerCase().includes(term);
-  });
+  const displayedDiagnosticos = React.useMemo(() => {
+    const term = diagnosticoSearch.toLowerCase().trim();
+    const list = diagnosticos.map((d, idx) => ({
+      ...d,
+      id: d.id !== undefined && d.id !== null ? Number(d.id) : (idx + 1)
+    }));
+
+    let filtered = list.filter((d) => {
+      if (!term) return true;
+      const cod = (d.codigo || '').toLowerCase();
+      const desc = (d.descripcion || '').toLowerCase();
+      return cod.includes(term) || desc.includes(term);
+    });
+
+    if (selectedDiagnosticoId !== '') {
+      const selectedItem = list.find((d) => d.id === Number(selectedDiagnosticoId));
+      if (selectedItem && !filtered.some((d) => d.id === selectedItem.id)) {
+        filtered = [selectedItem, ...filtered];
+      }
+    }
+    return filtered;
+  }, [diagnosticos, diagnosticoSearch, selectedDiagnosticoId]);
 
   const filteredExamenesCatalog = examenes.filter((ex) => {
     if (examCategoryFilter === 'all') return true;
@@ -267,7 +285,13 @@ export const NuevaRecetaView: React.FC<NuevaRecetaViewProps> = ({
       return;
     }
 
-    const selectedDiag = diagnosticos.find((d) => d.id === Number(selectedDiagnosticoId));
+    const selectedDiag = selectedDiagnosticoId
+      ? (diagnosticos.find((d, idx) => (d.id !== undefined && d.id !== null ? Number(d.id) : (idx + 1)) === Number(selectedDiagnosticoId)) || {
+          id: Number(selectedDiagnosticoId),
+          codigo: 'CIE-10',
+          descripcion: 'Diagnóstico Clínico'
+        })
+      : null;
     const newVisitaId = Date.now();
     const verificationCode = generateVerificationCode(newVisitaId, Number(selectedPacienteId));
 
@@ -506,12 +530,15 @@ export const NuevaRecetaView: React.FC<NuevaRecetaViewProps> = ({
                 Diagnóstico Principal:
               </label>
               <select
-                value={selectedDiagnosticoId}
-                onChange={(e) => setSelectedDiagnosticoId(e.target.value ? Number(e.target.value) : '')}
+                value={selectedDiagnosticoId === '' ? '' : String(selectedDiagnosticoId)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedDiagnosticoId(val === '' ? '' : Number(val));
+                }}
                 className="w-full py-2 px-3 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:bg-white focus:outline-none"
               >
                 <option value="">-- Sin diagnóstico específico o control preventivo --</option>
-                {filteredDiagnosticos.map((d) => (
+                {displayedDiagnosticos.map((d) => (
                   <option key={d.id} value={d.id}>
                     [{d.codigo}] {d.descripcion}
                   </option>

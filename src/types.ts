@@ -104,7 +104,7 @@ export interface Visita {
   paciente_id: number;
   paciente?: Paciente;
   diagnostico_id?: number | null;
-  diagnostico?: Diagnostico;
+  diagnostico?: Diagnostico | null;
   tratamiento?: string;
   fecha: string;
   estado_id: number; // 1: Activa/Emitida, 2: Parcialmente Dispensada, 3: Dispensada Totalmente

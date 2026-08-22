@@ -197,29 +197,37 @@ export const App: React.FC = () => {
   };
 
   const handleSaveVisita = (newVisita: Visita) => {
-    // Optimistic Update
+    // 1. Optimistic Update and IMMEDIATELY open prescription modal (US-10)
     setVisitas(prev => {
-      const next = [newVisita, ...prev];
+      const next = [newVisita, ...prev.filter(v => v.id !== newVisita.id && v.codigo_verificacion !== newVisita.codigo_verificacion)];
       try { localStorage.setItem('easyrecetas_visitas', JSON.stringify(next)); } catch {}
       return next;
     });
 
-    // Post to API
+    setSelectedVisitaForModal(newVisita);
+
+    // 2. Post to backend API for database persistence
     fetch('/api/visitas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ visita: newVisita })
     })
-      .then(res => res.json())
-      .then(saved => {
-        setVisitas(prev => {
-          const next = prev.map(v => (v.id === newVisita.id || v.codigo_verificacion === saved.codigo_verificacion) ? saved : v);
-          try { localStorage.setItem('easyrecetas_visitas', JSON.stringify(next)); } catch {}
-          return next;
-        });
-        setSelectedVisitaForModal(saved);
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
       })
-      .catch(err => console.error('Error saving visita:', err));
+      .then(saved => {
+        if (saved && (saved.id || saved.codigo_verificacion)) {
+          const merged = { ...newVisita, ...saved };
+          setVisitas(prev => {
+            const next = prev.map(v => (v.id === newVisita.id || v.codigo_verificacion === merged.codigo_verificacion) ? merged : v);
+            try { localStorage.setItem('easyrecetas_visitas', JSON.stringify(next)); } catch {}
+            return next;
+          });
+          setSelectedVisitaForModal(merged);
+        }
+      })
+      .catch(err => console.warn('Backend sync notice on save visita:', err));
   };
 
   const handleQuemarTodaReceta = (visitaId: number, farmaceutaNombre: string) => {
